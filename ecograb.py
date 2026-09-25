@@ -324,7 +324,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
 def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
     tmpdir = os.path.join(out_dir, f".ecograb_{task_id}")
     os.makedirs(tmpdir, exist_ok=True)
-    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist"]
+    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "--newline"]
     if fmt_arg:
         cmd += ["-f", fmt_arg]
     if "googlevideo.com" in url or "/videoplayback" in url:
