@@ -245,13 +245,13 @@ class Sniffer:
                 pass
             time.sleep(0.5)
         if not ws_url:
-            self.log_cb("嗅探：未能连接浏览器调试端口")
+            self.log_cb("播放窗口：未能连接")
             return
         try:
             import websocket
             self.ws = websocket.create_connection(ws_url, timeout=15)
             self.ws.send(json.dumps({"id": 1, "method": "Network.enable"}))
-            self.log_cb("嗅探：已连接，请在播放窗口打开/刷新视频页并点击播放")
+            self.log_cb("已就绪：请在播放窗口点击播放视频")
             while self.running:
                 try:
                     msg = json.loads(self.ws.recv())
@@ -280,7 +280,7 @@ class Sniffer:
                     if self.event_cb:
                         self.event_cb("captured", url)
         except Exception as e:
-            self.log_cb(f"嗅探：连接中断 {e}")
+            self.log_cb(f"播放窗口连接中断 {e}")
         finally:
             if self.ws:
                 try:
@@ -533,7 +533,7 @@ class CompressQueue:
 
 # ---------- GUI ----------
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 class TaskRow:
     """下载池中的一行任务"""
@@ -639,6 +639,14 @@ class App:
         self.cookie_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="用浏览器Cookie下载", variable=self.cookie_var).pack(side="left", padx=8)
 
+        # 下载目录
+        drow = ttk.Frame(self.root)
+        drow.pack(fill="x", **pad)
+        ttk.Label(drow, text="下载到:").pack(side="left")
+        self.dl_dir_var = tk.StringVar(value=SCRIPT_DIR)
+        ttk.Entry(drow, textvariable=self.dl_dir_var, width=64).pack(side="left", fill="x", expand=True, padx=4)
+        ttk.Button(drow, text="浏览…", command=self._pick_dir).pack(side="left", padx=2)
+
         # 格式列表（探测/嗅探共用）
         frm = ttk.LabelFrame(self.root, text="格式列表（鼠标移到行上点「下载」；⚠=AV1/VP9 部分播放器不支持）")
         frm.pack(fill="both", expand=True, **pad)
@@ -668,6 +676,12 @@ class App:
         self._pool_canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
+        # 日志抽屉
+        self._log_btn = ttk.Button(self.root, text="▸ 日志（调试）", command=self._toggle_log)
+        self._log_btn.pack(anchor="w", padx=8)
+        self.log_text = tk.Text(self.root, height=8, state="disabled", wrap="word")
+        self.log("就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。")
+
     def _make_rightclick_menu(self, widget):
         """右键直接粘贴（tkinter 默认没有右键粘贴）"""
         def paste(e):
@@ -679,11 +693,10 @@ class App:
                 pass
         widget.bind("<Button-3>", paste)
 
-        # 日志抽屉
-        self._log_btn = ttk.Button(self.root, text="▸ 日志（调试）", command=self._toggle_log)
-        self._log_btn.pack(anchor="w", padx=8)
-        self.log_text = tk.Text(self.root, height=8, state="disabled", wrap="word")
-        self.log("就绪：粘贴视频地址 → 探测；失败会引导你播放视频页，程序自动嗅探。")
+    def _pick_dir(self):
+        d = filedialog.askdirectory(initialdir=self.dl_dir_var.get() or SCRIPT_DIR)
+        if d:
+            self.dl_dir_var.set(d)
 
     # ---------- 日志与队列 ----------
     def log(self, msg):
@@ -738,7 +751,14 @@ class App:
         if not url:
             messagebox.showwarning("提示", "请先粘贴视频页 URL")
             return
-        self.log(f"正在探测：{url}")
+        # 新地址：清空上一轮列表与捕获，避免新旧结果混在一起
+        self.formats = []
+        self.captured = []
+        self.current_info = None
+        self._hover_row = None
+        self._hide_dl_btn()
+        self.fmt_tree.delete(*self.fmt_tree.get_children())
+        self.log(f"正在解析：{url}")
         threading.Thread(target=self._probe_worker, args=(url,), daemon=True).start()
 
     def _probe_worker(self, url):
@@ -752,9 +772,9 @@ class App:
 
     def _probe_failed(self, payload):
         url, err = payload
-        self.log(f"探测失败：{err}")
+        self.log(f"未能直接解析出视频文件：{err}")
         win = tk.Toplevel(self.root)
-        win.title("需要嗅探")
+        win.title("需要你播放一次")
         win.geometry("480x210")
         win.transient(self.root)
         tk.Label(win, text="视频文件藏得比较深，需要你在我们的窗口\n再点击一次播放。",
@@ -772,7 +792,7 @@ class App:
             win.destroy()
         except Exception:
             pass
-        self.log(f"嗅探：打开播放窗口 {url}")
+        self.log(f"正在打开播放窗口：{url}")
         self.sniffer = Sniffer(self.log, self._on_sniff_event)
         err = self.sniffer.start(url)
         if err:
@@ -813,12 +833,12 @@ class App:
         else:
             res_label, codec_label = "视频流?", "未知"
         self.fmt_tree.insert("", 0, values=(
-            res_label, "捕获", codec_label, "捕获流", "嗅探"))
+            res_label, "捕获", codec_label, "捕获流", "播放捕获"))
         self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
         if "音频" in res_label:
-            self.log(f"嗅探捕获音频流：{url}")
+            self.log(f"捕获到音频流：{url}")
         else:
-            self.log(f"嗅探捕获视频流 {res_label}：{url}")
+            self.log(f"捕获到视频流 {res_label}：{url}")
 
     def _show_tooltip(self, msg):
         try:
@@ -847,7 +867,7 @@ class App:
                 codec = a.split(".")[0] + "（纯音频）"
             warn = "⚠" if ("av1" in v or "vp9" in v or "vp08" in v or "vp09" in v) else "✓"
             self.fmt_tree.insert("", "end", iid=str(i), values=(
-                f["res"] or "", f["id"], f"{codec} {warn}", fmt_size(f["size"]), "探测"))
+                f["res"] or "", f["id"], f"{codec} {warn}", fmt_size(f["size"]), "网页"))
         self.log(f"探测成功：{len(fmts)} 个格式")
 
     def _mouse_on_dl_btn(self, e):
@@ -902,7 +922,7 @@ class App:
             vals = self.fmt_tree.item(row).get("values") or []
             is_audio = bool(vals and "音频" in str(vals[0]))
             name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
-            self.pool.add(url, None, SCRIPT_DIR, None,
+            self.pool.add(url, None, self.dl_dir_var.get(), None,
                           name, self.cookie_var.get())
             if not is_audio:
                 self.log("提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并")
@@ -911,7 +931,7 @@ class App:
         if not url:
             messagebox.showwarning("提示", "URL 为空")
             return
-        self.pool.add(url, fmt_arg_for(fmt), SCRIPT_DIR, None,
+        self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                       f"{fmt['res'] or fmt['id']} · {fmt['id']}", self.cookie_var.get())
         self.log(f"加入下载池：{fmt['res'] or fmt['id']}（格式 {fmt['id']}）")
 

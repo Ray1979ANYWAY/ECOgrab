@@ -29,7 +29,7 @@ root.update()
 assert len(app.captured) == 1, app.captured
 items = app.fmt_tree.get_children()
 assert items, "捕获行未加入格式列表"
-assert "嗅探" in app.fmt_tree.item(items[0], "values")[4], app.fmt_tree.item(items[0], "values")
+assert "播放捕获" in app.fmt_tree.item(items[0], "values")[4], app.fmt_tree.item(items[0], "values")
 print("3. 嗅探捕获入列表 + tooltip OK", flush=True)
 
 # 下载池行组件（不触发真实下载）
