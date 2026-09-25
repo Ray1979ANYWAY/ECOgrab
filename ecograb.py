@@ -357,6 +357,7 @@ class DownloadTask:
         self.size_str = ""
         self.total_known = False
         self.dl_bytes = 0
+        self._total_bytes = 0
         self.proc = None
         self.out_path = None
         self.tmpdir = None
@@ -369,12 +370,41 @@ class DownloadTask:
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, encoding="utf-8", errors="replace",
                                      creationflags=NO_WINDOW)
+        if not self.fmt_arg:
+            threading.Thread(target=self._preprobe, daemon=True).start()
         threading.Thread(target=self._run, daemon=True).start()
         if self.ui:
             self.ui.refresh()
 
+    def _preprobe(self):
+        """嗅探流直链：下载前用 yt-dlp -J 拿总大小和真实标题（解决摆锤和文件名）"""
+        try:
+            args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
+            args += cookie_args()
+            if self.referer and "googlevideo.com" not in self.url:
+                args += ["--referer", self.referer]
+            args.append(self.url)
+            r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=25, creationflags=NO_WINDOW)
+            if r.returncode != 0:
+                return
+            info = json.loads(r.stdout)
+            size = info.get("filesize") or info.get("filesize_approx")
+            if size:
+                self._total_bytes = int(size)
+                self.total_known = True
+                if self.ui:
+                    self.pool.on_task_update(self)
+            title = info.get("title")
+            if title:
+                ext = info.get("ext") or "mp4"
+                self.title = f"{title}.{ext}"
+                if self.ui:
+                    self.pool.on_task_update(self)
+        except Exception:
+            pass
+
     def _run(self):
-        total_bytes = 0
         _unit = {"KiB": 1024, "MiB": 1048576, "GiB": 1073741824}
 
         # 兜底：嗅探流直链 yt-dlp 可能不输出进度行，先 HEAD 拿总大小（仅流 URL，referer 用真实页面）
@@ -387,13 +417,12 @@ class DownloadTask:
                 with urllib.request.urlopen(req, timeout=10) as r:
                     cl = r.headers.get("Content-Length")
                     if cl:
-                        total_bytes = int(cl)
+                        self._total_bytes = int(cl)
                         self.total_known = True
             except Exception:
                 pass
 
         def poll_part():
-            nonlocal total_bytes
             while self.state == "downloading":
                 if self.tmpdir and os.path.isdir(self.tmpdir):
                     got = 0
@@ -417,9 +446,9 @@ class DownloadTask:
                     if got != self.dl_bytes:
                         self.dl_bytes = got
                         changed = True
-                    if total_bytes > 0:
+                    if self._total_bytes > 0:
                         self.total_known = True
-                        pct = min(99.9, got / total_bytes * 100)
+                        pct = min(99.9, got / self._total_bytes * 100)
                         if pct > self.progress:
                             self.progress = pct
                             changed = True
@@ -436,7 +465,7 @@ class DownloadTask:
                 self.size_str = m.group(2)
                 mm = re.match(r"([\d.]+)(MiB|GiB|KiB)", m.group(2))
                 if mm:
-                    total_bytes = int(float(mm.group(1)) * _unit[mm.group(2)])
+                    self._total_bytes = int(float(mm.group(1)) * _unit[mm.group(2)])
                     self.total_known = True
                 if self.ui:
                     self.pool.on_task_update(self)
@@ -679,6 +708,15 @@ class TaskRow:
                     "该任务仍在下载/暂停中，删除会中断并丢弃未完成的文件。确定删除？",
                     parent=self.app.root):
                 return
+        elif st == "done" and self.task.out_path and os.path.exists(self.task.out_path):
+            if messagebox.askyesno("删除任务",
+                    f"是否同时删除已下载的文件？\n\n{os.path.basename(self.task.out_path)}\n\n是 = 连文件一起删除\n否 = 仅从列表移除",
+                    parent=self.app.root):
+                try:
+                    os.remove(self.task.out_path)
+                    self.app.log(f"已删除文件：{os.path.basename(self.task.out_path)}")
+                except OSError as e:
+                    self.app.log(f"删除文件失败：{e}")
         self.task.pool.remove(self.task)
         self.app.log(f"已删除任务：{self.task.title}")
     def _on_mode(self, _e=None):
@@ -1148,8 +1186,11 @@ class App:
         if not url:
             messagebox.showwarning("提示", "URL 为空")
             return
+        info = getattr(self, "current_info", None) or {}
+        t = (info.get("title") or "").strip() or f"{fmt['res'] or fmt['id']} · {fmt['id']}"
+        ext = fmt.get("ext") or "mp4"
         self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
-                      f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
+                      f"{t}.{ext}", True,
                       referer=url if not url.startswith("about:") else None)
         self.log(f"加入下载池：{fmt['res'] or fmt['id']}（格式 {fmt['id']}）")
 
