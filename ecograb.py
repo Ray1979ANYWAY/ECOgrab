@@ -374,13 +374,13 @@ class DownloadTask:
         total_bytes = 0
         _unit = {"KiB": 1024, "MiB": 1048576, "GiB": 1073741824}
 
-        # 兜底：yt-dlp 对某些直链（嗅探流）不输出进度行，先 HEAD 拿总大小
-        if self.url and not self.url.startswith("file://"):
+        # 兜底：嗅探流直链 yt-dlp 可能不输出进度行，先 HEAD 拿总大小（仅流 URL，referer 用真实页面）
+        if self.url and not self.url.startswith("file://") and self.referer and self.referer != self.url:
             try:
                 import urllib.request
                 req = urllib.request.Request(self.url, method="HEAD",
                                              headers={"User-Agent": "Mozilla/5.0",
-                                                      "Referer": "https://www.youtube.com/"})
+                                                      "Referer": self.referer})
                 with urllib.request.urlopen(req, timeout=10) as r:
                     cl = r.headers.get("Content-Length")
                     if cl:
@@ -391,7 +391,7 @@ class DownloadTask:
         def poll_part():
             nonlocal total_bytes
             while self.state == "downloading":
-                if total_bytes > 0 and self.tmpdir and os.path.isdir(self.tmpdir):
+                if self.tmpdir and os.path.isdir(self.tmpdir):
                     got = 0
                     name = None
                     try:
@@ -410,10 +410,11 @@ class DownloadTask:
                         if n and n != self.title:
                             self.title = n
                             changed = True
-                    pct = min(99.9, got / total_bytes * 100)
-                    if pct > self.progress:
-                        self.progress = pct
-                        changed = True
+                    if total_bytes > 0:
+                        pct = min(99.9, got / total_bytes * 100)
+                        if pct > self.progress:
+                            self.progress = pct
+                            changed = True
                     if changed and self.ui:
                         self.pool.on_task_update(self)
                 time.sleep(0.5)
@@ -734,7 +735,7 @@ class App:
         self._hover_row = None
         self._dl_btn = None
         self.log_visible = False
-        self.pool = DownloadPool(self._ui_event, self.log)
+        self.pool = DownloadPool(lambda ev: self.q.put(("ui", ev)), self.log)
         self.cqueue = CompressQueue(self.log, self._ui_event)
         self._build_ui()
         self._start_capture_server()
@@ -856,6 +857,8 @@ class App:
                 elif kind == "sniff_timeout":
                     messagebox.showinfo("未捕获到视频",
                         "这一分钟内没有嗅探到视频文件。\n请确认已在播放窗口打开视频页并点击播放，然后重新点「探测格式」。")
+                elif kind == "ui":
+                    self._ui_event(item[1])
                 elif kind in ("added", "progress", "paused"):
                     self._ui_event((kind, item[1]))
                 elif kind == "done":
