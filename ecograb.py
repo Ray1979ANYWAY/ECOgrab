@@ -367,16 +367,49 @@ class DownloadTask:
             self.ui.refresh()
 
     def _run(self):
+        total_bytes = 0
+        _unit = {"KiB": 1024, "MiB": 1048576, "GiB": 1073741824}
+
+        def poll_part():
+            nonlocal total_bytes
+            while self.state == "downloading":
+                if total_bytes > 0 and self.tmpdir and os.path.isdir(self.tmpdir):
+                    got = 0
+                    try:
+                        for f in os.listdir(self.tmpdir):
+                            if f.endswith(".part"):
+                                got += os.path.getsize(os.path.join(self.tmpdir, f))
+                    except OSError:
+                        pass
+                    pct = min(99.9, got / total_bytes * 100)
+                    if pct > self.progress:
+                        self.progress = pct
+                        if self.ui:
+                            self.pool.on_task_update(self)
+                time.sleep(0.5)
+
+        threading.Thread(target=poll_part, daemon=True).start()
         for line in self.proc.stdout:
             line = line.strip()
             m = re.search(r"\[download\]\s+([\d.]+)% of ~?([\d.]+(?:MiB|GiB|KiB))", line)
             if m:
                 self.progress = float(m.group(1))
                 self.size_str = m.group(2)
+                mm = re.match(r"([\d.]+)(MiB|GiB|KiB)", m.group(2))
+                if mm:
+                    total_bytes = int(float(mm.group(1)) * _unit[mm.group(2)])
                 if self.ui:
                     self.pool.on_task_update(self)
-            elif line.startswith("ERROR"):
-                self.pool.log(f"下载错误：{line}")
+            else:
+                fm = re.search(r"(?:Destination|Merging formats into):?\s*(.+)", line)
+                if fm:
+                    name = os.path.basename(fm.group(1).strip().strip('"'))
+                    if name and name != self.title:
+                        self.title = name
+                        if self.ui:
+                            self.pool.on_task_update(self)
+                elif line.startswith("ERROR"):
+                    self.pool.log(f"下载错误：{line}")
         self.proc.wait()
         ok = self.proc.returncode == 0
         out = None
@@ -571,6 +604,7 @@ class TaskRow:
 
     def refresh(self):
         s = self.task.state
+        self.name["text"] = self.task.title
         self.bar["value"] = self.task.progress
         if self.task.state == "downloading" and self.task.size_str:
             self.pct["text"] = f"{self.task.progress:.0f}% ({self.task.size_str})"
