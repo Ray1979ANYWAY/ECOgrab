@@ -41,7 +41,7 @@ root.update()
 assert t.ui is not None
 assert "排队" in row.state_lbl.cget("text")
 # 模拟下载中进度
-t.state = "downloading"; t.progress = 42.5; t.size_str = "10.0MiB"
+t.state = "downloading"; t.progress = 42.5; t.size_str = "10.0MiB"; t.total_known = True
 row.refresh(); root.update()
 assert "42%" in row.pct.cget("text")
 assert str(row.pause_btn.cget("state")) == "normal"

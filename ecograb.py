@@ -324,7 +324,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
 def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False, referer=None):
     tmpdir = os.path.join(out_dir, f".ecograb_{task_id}")
     os.makedirs(tmpdir, exist_ok=True)
-    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "--newline"]
+    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "--newline",
+           "--progress-delta", "0.5"]
     if fmt_arg:
         cmd += ["-f", fmt_arg]
     if "googlevideo.com" in url or "/videoplayback" in url:
@@ -354,6 +355,8 @@ class DownloadTask:
         self.state = "waiting"
         self.progress = 0.0
         self.size_str = ""
+        self.total_known = False
+        self.dl_bytes = 0
         self.proc = None
         self.out_path = None
         self.tmpdir = None
@@ -385,6 +388,7 @@ class DownloadTask:
                     cl = r.headers.get("Content-Length")
                     if cl:
                         total_bytes = int(cl)
+                        self.total_known = True
             except Exception:
                 pass
 
@@ -410,7 +414,11 @@ class DownloadTask:
                         if n and n != self.title:
                             self.title = n
                             changed = True
+                    if got != self.dl_bytes:
+                        self.dl_bytes = got
+                        changed = True
                     if total_bytes > 0:
+                        self.total_known = True
                         pct = min(99.9, got / total_bytes * 100)
                         if pct > self.progress:
                             self.progress = pct
@@ -429,6 +437,7 @@ class DownloadTask:
                 mm = re.match(r"([\d.]+)(MiB|GiB|KiB)", m.group(2))
                 if mm:
                     total_bytes = int(float(mm.group(1)) * _unit[mm.group(2)])
+                    self.total_known = True
                 if self.ui:
                     self.pool.on_task_update(self)
             elif line.startswith("ERROR"):
@@ -652,6 +661,7 @@ class TaskRow:
         self.mode_cb.current(0 if not task.mode else list(COMPRESS_MODES.keys()).index(task.mode) + 1)
         self.mode_cb.pack(side="left", padx=2)
         self.mode_cb.bind("<<ComboboxSelected>>", self._on_mode)
+        self._bar_mode = "determinate"
         self.del_btn = ttk.Button(self.frame, text="删除", width=5, command=self._on_delete)
         self.del_btn.pack(side="left", padx=2)
 
@@ -678,8 +688,20 @@ class TaskRow:
     def refresh(self):
         s = self.task.state
         self.name["text"] = self.task.title
-        self.bar["value"] = self.task.progress
-        if self.task.state == "downloading" and self.task.size_str:
+        mode = "indeterminate" if (s == "downloading" and not self.task.total_known) else "determinate"
+        if mode != self._bar_mode:
+            self._bar_mode = mode
+            self.bar.config(mode=mode)
+            if mode == "indeterminate":
+                self.bar.start(12)
+            else:
+                self.bar.stop()
+        if mode == "determinate":
+            self.bar["value"] = self.task.progress
+        if s == "downloading" and not self.task.total_known:
+            mb = self.task.dl_bytes / 1048576
+            self.pct["text"] = f"已下 {mb:.0f}MB" if mb >= 1 else f"已下 {int(self.task.dl_bytes)}B"
+        elif self.task.state == "downloading" and self.task.size_str:
             self.pct["text"] = f"{self.task.progress:.0f}% ({self.task.size_str})"
         else:
             self.pct["text"] = f"{self.task.progress:.0f}%"
@@ -1142,6 +1164,13 @@ class App:
 
     # ---------- 下载池 UI ----------
     def _ui_event(self, event):
+        kind, payload = event
+        try:
+            self._ui_event_impl(event)
+        except Exception as e:
+            self.log(f"界面刷新错误[{kind}]：{e}")
+
+    def _ui_event_impl(self, event):
         kind, payload = event
         if kind == "added":
             task = payload
