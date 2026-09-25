@@ -613,7 +613,9 @@ class App:
         top.pack(fill="x", **pad)
         ttk.Label(top, text="视频页 URL:").pack(side="left")
         self.url_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.url_var, width=64).pack(side="left", fill="x", expand=True, padx=4)
+        self.url_entry = ttk.Entry(top, textvariable=self.url_var, width=64)
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=4)
+        self._make_rightclick_menu(self.url_entry)
         ttk.Button(top, text="探测格式", command=self.on_probe).pack(side="left", padx=2)
         self.cookie_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="用浏览器Cookie下载", variable=self.cookie_var).pack(side="left", padx=8)
@@ -645,6 +647,29 @@ class App:
         self._pool_canvas.bind("<Configure>", lambda e: self._pool_canvas.itemconfigure(self._pool_win, width=e.width))
         self._pool_canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+
+    def _make_rightclick_menu(self, widget):
+        """右键菜单：粘贴/复制/全选/清空（tkinter 默认没有右键粘贴）"""
+        menu = tk.Menu(widget, tearoff=0)
+
+        def show(e):
+            menu.delete(0, "end")
+            try:
+                has_clip = bool(widget.clipboard_get())
+            except Exception:
+                has_clip = False
+            if has_clip:
+                menu.add_command(label="粘贴", command=lambda: widget.event_generate("<<Paste>>"))
+            if widget.selection_present():
+                menu.add_command(label="复制", command=lambda: widget.event_generate("<<Copy>>"))
+            menu.add_command(label="全选", command=lambda: widget.event_generate("<<SelectAll>>"))
+            menu.add_command(label="清空", command=lambda: widget.delete(0, "end"))
+            try:
+                menu.tk_popup(e.x_root, e.y_root)
+            finally:
+                menu.grab_release()
+
+        widget.bind("<Button-3>", show)
 
         # 日志抽屉
         self._log_btn = ttk.Button(self.root, text="▸ 日志（调试）", command=self._toggle_log)
@@ -802,8 +827,10 @@ class App:
         self._hover_row = row
         bbox = self.fmt_tree.bbox(row)
         if bbox:
-            x, y, w, h = bbox
-            self._dl_btn.place(x=max(0, w - 86), y=y, width=82, height=max(18, h))
+            _, y, _, h = bbox
+            cb = self.fmt_tree.bbox(row, "codec")
+            x = cb[0] + cb[2] + 2 if cb else max(0, bbox[2] - 86)
+            self._dl_btn.place(x=x, y=y, width=82, height=max(18, h))
             self._dl_btn.config(command=lambda r=row: self._download_fmt_row(r))
 
     def _hide_dl_btn(self):
