@@ -321,7 +321,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         pass
 
 # ---------- 下载池 ----------
-def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
+def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False, referer=None):
     tmpdir = os.path.join(out_dir, f".ecograb_{task_id}")
     os.makedirs(tmpdir, exist_ok=True)
     cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "--newline"]
@@ -329,6 +329,8 @@ def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
         cmd += ["-f", fmt_arg]
     if "googlevideo.com" in url or "/videoplayback" in url:
         cmd += ["--referer", "https://www.youtube.com/"]
+    elif referer:
+        cmd += ["--referer", referer]
     cmd += ["--merge-output-format", "mp4",
             "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
             "-c"]
@@ -339,7 +341,7 @@ def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
 
 class DownloadTask:
     """单个下载任务；state: waiting/downloading/paused/done/failed"""
-    def __init__(self, url, fmt_arg, out_dir, mode, title, pool, task_id, use_cookie=False):
+    def __init__(self, url, fmt_arg, out_dir, mode, title, pool, task_id, use_cookie=False, referer=None):
         self.url = url
         self.fmt_arg = fmt_arg
         self.out_dir = out_dir
@@ -348,6 +350,7 @@ class DownloadTask:
         self.pool = pool
         self.task_id = task_id
         self.use_cookie = use_cookie
+        self.referer = referer
         self.state = "waiting"
         self.progress = 0.0
         self.size_str = ""
@@ -357,7 +360,8 @@ class DownloadTask:
         self.ui = None   # 任务行组件
 
     def start(self):
-        cmd, self.tmpdir = build_dl_cmd(self.url, self.fmt_arg, self.out_dir, self.task_id, self.use_cookie)
+        cmd, self.tmpdir = build_dl_cmd(self.url, self.fmt_arg, self.out_dir, self.task_id,
+                                         self.use_cookie, self.referer)
         self.state = "downloading"
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, encoding="utf-8", errors="replace",
@@ -485,9 +489,10 @@ class DownloadPool:
         self.on_update = on_update
         self.log = log_cb
 
-    def add(self, url, fmt_arg, out_dir, mode, title, use_cookie=False):
+    def add(self, url, fmt_arg, out_dir, mode, title, use_cookie=False, referer=None):
         self.task_seq += 1
-        t = DownloadTask(url, fmt_arg, out_dir, mode, title, self, self.task_seq, use_cookie)
+        t = DownloadTask(url, fmt_arg, out_dir, mode, title, self, self.task_seq,
+                         use_cookie, referer)
         self.tasks.append(t)
         self.on_update(("added", t))
         threading.Thread(target=self._schedule, args=(t,), daemon=True).start()
@@ -672,6 +677,8 @@ class App:
         self.current_info = None
         self.formats = []
         self.captured = []
+        self.hls_formats = []
+        self.hls_urls = []
         self._hover_row = None
         self._dl_btn = None
         self.log_visible = False
@@ -784,6 +791,16 @@ class App:
                     self._probe_failed(item[1])
                 elif kind == "capture":
                     self._on_capture_url(item[1])
+                elif kind == "hls_formats":
+                    _, url, ph, fmts = item
+                    self._show_hls_formats(url, ph, fmts)
+                elif kind == "hls_fail":
+                    _, ph, err = item
+                    try:
+                        self.fmt_tree.delete(ph)
+                    except Exception:
+                        pass
+                    self.log(f"HLS 清晰度解析失败：{err[-200:]}")
                 elif kind == "sniff_timeout":
                     messagebox.showinfo("未捕获到视频",
                         "这一分钟内没有嗅探到视频文件。\n请确认已在播放窗口打开视频页并点击播放，然后重新点「探测格式」。")
@@ -877,6 +894,10 @@ class App:
             res_label, codec_label = "视频流", (mime.split("/")[1] or "视频")
         elif ".m3u8" in url:
             res_label, codec_label = "视频流(HLS)", "HLS"
+            self._hls_seq = getattr(self, "_hls_seq", 0) + 1
+            ph = f"hls_ph_{self._hls_seq}"
+            self.fmt_tree.insert("", 0, iid=ph, values=(res_label, "捕获", codec_label, "捕获流", "嗅探"))
+            threading.Thread(target=self._probe_hls, args=(url, ph), daemon=True).start()
         elif ".mpd" in url:
             res_label, codec_label = "视频流(DASH)", "DASH"
         elif ".mp4" in url:
@@ -892,6 +913,55 @@ class App:
             self.log(f"嗅探捕获音频流：{url}")
         else:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
+
+    def _probe_hls(self, url, ph):
+        try:
+            args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
+            args += cookie_args()
+            ref = self._sniff_referer()
+            if ref and "googlevideo.com" not in url:
+                args += ["--referer", ref]
+            args.append(url)
+            r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=90, creationflags=NO_WINDOW)
+            if r.returncode != 0:
+                self.q.put(("hls_fail", ph, (r.stderr or r.stdout or "")[-300:]))
+                return
+            info = json.loads(r.stdout)
+            self.q.put(("hls_formats", url, ph, extract_formats(info)))
+        except Exception as e:
+            self.q.put(("hls_fail", ph, str(e)))
+
+    def _show_hls_formats(self, url, ph, fmts):
+        try:
+            self.fmt_tree.delete(ph)
+        except Exception:
+            pass
+        if not fmts:
+            self.log("HLS 流未解析出清晰度，将按默认最高清晰度下载")
+            return
+        self.hls_formats.append(fmts)
+        self.hls_urls.append(url)
+        base = len(self.hls_formats) - 1
+        for i, f in enumerate(fmts, 1):
+            v, a = f["vcodec"], f["acodec"]
+            if v != "none" and a != "none":
+                codec = f"{v.split('.')[0]}+{a.split('.')[0]}"
+            elif v != "none":
+                codec = v.split(".")[0] + "（自动合音轨）"
+            else:
+                codec = a.split(".")[0] + "（纯音频）"
+            warn = "⚠" if ("av1" in v or "vp9" in v or "vp08" in v or "vp09" in v) else "✓"
+            self.fmt_tree.insert("", 0, iid=f"hls_{base}_{i}", values=(
+                f["res"] or "", f["id"], f"{codec} {warn}", fmt_size(f["size"]), "嗅探"))
+        self.log(f"HLS 嗅探展开 {len(fmts)} 个清晰度，可直接点选")
+
+    def _sniff_referer(self):
+        try:
+            u = self.sniffer.start_url
+            return u if u and u != "about:blank" else None
+        except Exception:
+            return None
 
     def _show_tooltip(self, msg):
         try:
@@ -969,6 +1039,19 @@ class App:
             idx = int(row) - 1
             fmt = self.formats[idx]
         except (ValueError, IndexError):
+            if row.startswith("hls_"):
+                try:
+                    _, bi, i = row.split("_")
+                    fmts = self.hls_formats[int(bi)]
+                    fmt = fmts[int(i) - 1]
+                    url = self.hls_urls[int(bi)]
+                except Exception:
+                    return
+                self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
+                              f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
+                              referer=self._sniff_referer())
+                self.log(f"加入下载池：{fmt['res'] or fmt['id']}（HLS 格式 {fmt['id']}）")
+                return
             url = self._capture_url_for_row(row)
             if not url:
                 return
@@ -976,7 +1059,7 @@ class App:
             is_audio = bool(vals and "音频" in str(vals[0]))
             name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
             self.pool.add(url, None, self.dl_dir_var.get(), None,
-                          name, True)
+                          name, True, referer=self._sniff_referer())
             if not is_audio:
                 self.log("提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并")
             return
@@ -985,7 +1068,8 @@ class App:
             messagebox.showwarning("提示", "URL 为空")
             return
         self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
-                      f"{fmt['res'] or fmt['id']} · {fmt['id']}", True)
+                      f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
+                      referer=url if not url.startswith("about:") else None)
         self.log(f"加入下载池：{fmt['res'] or fmt['id']}（格式 {fmt['id']}）")
 
     def _capture_url_for_row(self, row):
