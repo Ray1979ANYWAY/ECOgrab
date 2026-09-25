@@ -469,17 +469,30 @@ class DownloadTask:
 
     def pause(self):
         if self.state == "downloading" and self.proc:
+            self.state = "paused"
             try:
                 self.proc.terminate()
             except Exception:
                 pass
-            self.state = "paused"
             self.pool.on_task_paused(self)
 
     def resume(self):
         if self.state == "paused":
             self.state = "waiting"
             threading.Thread(target=self.pool._schedule, args=(self,), daemon=True).start()
+
+    def retry(self):
+        if self.state != "failed":
+            return
+        if self.tmpdir and os.path.isdir(self.tmpdir):
+            shutil.rmtree(self.tmpdir, ignore_errors=True)
+        self.progress = 0.0
+        self.size_str = ""
+        self.out_path = None
+        self.state = "waiting"
+        if self.ui:
+            self.pool.on_task_update(self)
+        threading.Thread(target=self.pool._schedule, args=(self,), daemon=True).start()
 
 class DownloadPool:
     def __init__(self, on_update, log_cb, max_concurrent=MAX_CONCURRENT):
@@ -509,6 +522,25 @@ class DownloadPool:
 
     def on_task_update(self, task):
         self.on_update(("progress", task))
+
+    def remove(self, task):
+        if task in self.tasks:
+            self.tasks.remove(task)
+        if task.proc and task.proc.poll() is None:
+            try:
+                task.proc.terminate()
+            except Exception:
+                pass
+        if task.state != "done":
+            if task.tmpdir and os.path.isdir(task.tmpdir):
+                shutil.rmtree(task.tmpdir, ignore_errors=True)
+        ui = task.ui
+        task.ui = None
+        if ui:
+            try:
+                ui.frame.destroy()
+            except Exception:
+                pass
 
     def on_task_done(self, task):
         self.sem.release()
@@ -619,11 +651,25 @@ class TaskRow:
         self.mode_cb.current(0 if not task.mode else list(COMPRESS_MODES.keys()).index(task.mode) + 1)
         self.mode_cb.pack(side="left", padx=2)
         self.mode_cb.bind("<<ComboboxSelected>>", self._on_mode)
+        self.del_btn = ttk.Button(self.frame, text="删除", width=5, command=self._on_delete)
+        self.del_btn.pack(side="left", padx=2)
 
     def _on_pause(self):
         self.task.pause()
     def _on_resume(self):
-        self.task.resume()
+        if self.task.state == "failed":
+            self.task.retry()
+        else:
+            self.task.resume()
+    def _on_delete(self):
+        st = self.task.state
+        if st in ("downloading", "paused"):
+            if not messagebox.askyesno("删除任务",
+                    "该任务仍在下载/暂停中，删除会中断并丢弃未完成的文件。确定删除？",
+                    parent=self.app.root):
+                return
+        self.task.pool.remove(self.task)
+        self.app.log(f"已删除任务：{self.task.title}")
     def _on_mode(self, _e=None):
         v = self.mode_cb.get()
         self.task.mode = None if v == "不压缩" else v
@@ -638,19 +684,25 @@ class TaskRow:
             self.pct["text"] = f"{self.task.progress:.0f}%"
         if s == "waiting":
             self.state_lbl["text"] = "排队"
+            self.pause_btn.config(state="disabled")
+            self.resume_btn.config(state="disabled", text="继续")
         elif s == "downloading":
             self.state_lbl["text"] = "下载中"
             self.pause_btn.config(state="normal")
-            self.resume_btn.config(state="disabled")
+            self.resume_btn.config(state="disabled", text="继续")
         elif s == "paused":
             self.state_lbl["text"] = "已暂停"
             self.pause_btn.config(state="disabled")
-            self.resume_btn.config(state="normal")
+            self.resume_btn.config(state="normal", text="继续")
         elif s == "done":
             self.state_lbl["text"] = "完成"
+            self.pause_btn.config(state="disabled")
+            self.resume_btn.config(state="disabled", text="继续")
             self._grey(True)
         elif s == "failed":
             self.state_lbl["text"] = "失败"
+            self.pause_btn.config(state="disabled")
+            self.resume_btn.config(state="normal", text="重新下载")
             self._grey(True)
 
     def show_compress(self, pct):
