@@ -5,6 +5,9 @@
 ffmpeg.exe
 ffprobe.exe
 
+# 本地工具（deno：yt-dlp 的 JS runtime，接近 100MB 上限，不推送）
+deno.exe
+
 # Python
 __pycache__/
 *.pyc

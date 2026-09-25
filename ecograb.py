@@ -67,12 +67,19 @@ def fmt_time(sec):
         return f"{h}:{m:02d}:{s:02d}"
     return f"{m}:{s:02d}"
 
+def cookie_args():
+    """YouTube 风控绕过：使用嗅探浏览器(.chrome_profile)的登录态 cookie；不存在则不带"""
+    profile = os.path.join(SCRIPT_DIR, ".chrome_profile")
+    if os.path.isdir(profile):
+        return ["--cookies-from-browser", f"chrome:{profile}"]
+    return []
+
 # ---------- 探测模块：yt-dlp -J ----------
 def probe_url(url, timeout=90):
     """返回 (info_dict, error)"""
     try:
         r = subprocess.run(
-            [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", url],
+            [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist"] + cookie_args() + ["-J", url],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
             creationflags=NO_WINDOW)
     except subprocess.TimeoutExpired:
@@ -149,6 +156,9 @@ def find_browser():
 def is_video_request(url, headers):
     if not url or url.startswith("data:"):
         return False
+    # YouTube 无扩展名流（googlevideo/videoplayback）特征兜底
+    if "googlevideo.com" in url or "/videoplayback" in url:
+        return True
     ct = (headers.get("content-type") or "").lower()
     if ct.startswith("video/") or ct in ("application/vnd.apple.mpegurl", "application/x-mpegurl",
                                          "application/dash+xml", "application/vnd.ms-sstr+xml"):
@@ -304,7 +314,7 @@ def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
            "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
            "-c"]
     if use_cookie:
-        cmd += ["--cookies-from-browser", "chrome"]
+        cmd += cookie_args()
     cmd.append(url)
     return cmd, tmpdir
 

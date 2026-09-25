@@ -1,10 +1,19 @@
 import subprocess
 import sys
 import re
+import os
+
+
+def cookie_args():
+    """YouTube 风控绕过：使用嗅探浏览器(.chrome_profile)的登录态 cookie；不存在则不带"""
+    profile = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".chrome_profile")
+    if os.path.isdir(profile):
+        return ["--cookies-from-browser", f"chrome:{profile}"]
+    return []
 
 def get_formats(url):
     result = subprocess.run(
-        ["yt-dlp.exe", "--ffmpeg-location", "ffmpeg.exe", "-F", url],
+        ["yt-dlp.exe", "--ffmpeg-location", "ffmpeg.exe"] + cookie_args() + ["-F", url],
         capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     if result.returncode != 0:
@@ -89,6 +98,7 @@ def print_formats(formats):
 def download(url, fmt_arg):
     cmd = [
         "yt-dlp.exe", "--ffmpeg-location", "ffmpeg.exe",
+        ] + cookie_args() + [
         "-f", fmt_arg,
         "--merge-output-format", "mp4",
         "-o", "%(title)s.%(ext)s",

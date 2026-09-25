@@ -176,3 +176,19 @@
 - **Chrome 新版**：默认 profile 不能开调试端口，独立 profile 又无登录态且易被反爬拦截——所以"嗅探用户已登录页面"只能靠页面内脚本（书签）转交地址；
 - **bookmarklet 局限**：`performance` 只记录已加载资源、只按 URL 判断（拿不到响应头），YouTube 等无扩展名流需特征匹配；
 - **架构结论**：压缩/探测/下载全是本地强项、浏览器侧做不到，故"本地程序 + 浏览器最小入口"是唯一平衡点；纯扩展不可行（沙箱无法调本地 exe）。
+
+### 阶段七：YouTube 探测修复（2026-09-26）
+**现象**：真实 YouTube 视频探测失败；嗅探窗口登录后播放 60 秒无捕获；download.bat 同样失败。
+**诊断（逐层排除）**：
+1. yt-dlp 报 "No supported JavaScript runtime" → YouTube 新版提取需要 JS runtime（deno）
+2. 显式 --js-runtimes deno 后警告消失，但仍 "This video is unavailable"
+3. 换 tv/android_vr 客户端 → 依旧 "Sign in to confirm you're not a bot" → **节点 IP 被 YouTube 风控**（数据中心/共享 IP 未登录必拦）
+4. `--cookies-from-browser chrome` 报 "Could not copy Chrome cookie database"（issue 7271：Chrome 运行中锁库 + 新版加密）
+**修复**：
+1. 下载 deno 2.9.7 → `D:\Documents\ECOgrab\deno.exe`（.gitignore 排除，不推送）
+2. 全局配置 `%APPDATA%\yt-dlp\config`：`--js-runtimes deno:D:/Documents/ECOgrab/deno.exe`（**注意：config 文件里反斜杠会被 yt-dlp 吃掉，必须用正斜杠**）→ 所有 yt-dlp 调用自动生效
+3. **cookie 通道**：ECOgrab 嗅探浏览器 `.chrome_profile` 登录 YouTube 后，`--cookies-from-browser chrome:<profile路径>` 可绕过 bot 风控（实测 ytsearch1 完整列出 144p-1080p）
+4. 代码集成：`ecograb.py` 新增 `cookie_args()`（探测/下载自动带）；`download.py` 同步
+5. `is_video_request` 补 googlevideo/videoplayback 特征兜底（YouTube 无扩展名流）
+**验证**：download.py 探测 ytsearch1:hello 成功（全格式列表）；test_v2.py 5 组全 PASS（断言同步更新）
+**遗留**：IP 被风控时未登录仍可能拦截 → 换干净节点（日/新/住宅 IP）；嗅探窗口登录态需保持；用户主 Chrome 的 cookie 通道（7271）未解，靠 .chrome_profile 绕开
