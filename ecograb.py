@@ -67,6 +67,21 @@ def fmt_time(sec):
         return f"{h}:{m:02d}:{s:02d}"
     return f"{m}:{s:02d}"
 
+# YouTube DASH 流 itag → (分辨率/类型标签, 编码标签)
+ITAG_LABELS = {
+    137: ("1080p H.264", "H.264"), 136: ("720p H.264", "H.264"), 135: ("480p H.264", "H.264"),
+    134: ("360p H.264", "H.264"), 133: ("240p H.264", "H.264"), 160: ("144p H.264", "H.264"),
+    248: ("1080p VP9", "VP9"), 247: ("720p VP9", "VP9"), 244: ("480p VP9", "VP9"),
+    243: ("360p VP9", "VP9"), 242: ("240p VP9", "VP9"), 278: ("144p VP9", "VP9"),
+    299: ("1080p60 VP9", "VP9"), 298: ("720p60 VP9", "VP9"),
+    399: ("1080p AV1", "AV1"), 398: ("1080p AV1", "AV1"), 397: ("480p AV1", "AV1"),
+    396: ("360p AV1", "AV1"), 395: ("240p AV1", "AV1"), 394: ("144p AV1", "AV1"),
+    140: ("音频 m4a 128k", "m4a"), 251: ("音频 opus 160k", "opus"),
+    139: ("音频 m4a 48k", "m4a"), 258: ("音频 m4a", "m4a"), 599: ("音频", "?"),
+    18: ("360p 合并", "H.264"), 22: ("720p 合并", "H.264"), 37: ("1080p 合并", "H.264"),
+}
+
+
 def cookie_args():
     """YouTube 风控绕过：使用嗅探浏览器(.chrome_profile)的登录态 cookie；不存在则不带"""
     profile = os.path.join(SCRIPT_DIR, ".chrome_profile")
@@ -769,27 +784,37 @@ class App:
         if any(u == url for u, in self.captured):
             return
         self.captured.append((url,))
-        mime = ""
         try:
             from urllib.parse import urlparse, parse_qs
-            mime = parse_qs(urlparse(url).query).get("mime", [""])[0]
+            q = parse_qs(urlparse(url).query)
         except Exception:
-            mime = ""
-        if ".m3u8" in url:
-            kind = "m3u8"
+            q = {}
+        mime = q.get("mime", [""])[0]
+        itag = q.get("itag", [""])[0]
+        itag_label = ITAG_LABELS.get(int(itag)) if itag.isdigit() else None
+        if itag_label:
+            res_label, codec_label = itag_label
+        elif mime.startswith("audio/"):
+            res_label, codec_label = "音频流", (mime.split("/")[1] or "音频")
+        elif mime.startswith("video/"):
+            res_label, codec_label = "视频流", (mime.split("/")[1] or "视频")
+        elif ".m3u8" in url:
+            res_label, codec_label = "视频流(HLS)", "HLS"
         elif ".mpd" in url:
-            kind = "mpd"
-        elif ".mp4" in url or mime.startswith("video/mp4"):
-            kind = "mp4"
+            res_label, codec_label = "视频流(DASH)", "DASH"
+        elif ".mp4" in url:
+            res_label, codec_label = "视频流", "mp4"
         elif "video/webm" in mime:
-            kind = "webm"
+            res_label, codec_label = "视频流", "webm"
         else:
-            kind = "流"
-        kind_label = {"mp4": "mp4", "webm": "webm", "m3u8": "HLS", "mpd": "DASH"}.get(kind, "未知")
+            res_label, codec_label = "视频流?", "未知"
         self.fmt_tree.insert("", 0, values=(
-            "嗅探·" + kind, "捕获", kind_label, "捕获流", "嗅探"))
+            res_label, "捕获", codec_label, "捕获流", "嗅探"))
         self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
-        self.log(f"嗅探捕获：{url}")
+        if "音频" in res_label:
+            self.log(f"嗅探捕获音频流：{url}")
+        else:
+            self.log(f"嗅探捕获视频流 {res_label}：{url}")
 
     def _show_tooltip(self, msg):
         try:
@@ -870,9 +895,13 @@ class App:
             url = self._capture_url_for_row(row)
             if not url:
                 return
+            vals = self.fmt_tree.item(row).get("values") or []
+            is_audio = bool(vals and "音频" in str(vals[0]))
+            name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
             self.pool.add(url, "best/bestvideo+bestaudio", SCRIPT_DIR, None,
-                          f"捕获流 {len(self.captured)}", self.cookie_var.get())
-            self.log("加入下载池：嗅探捕获流")
+                          name, self.cookie_var.get())
+            if not is_audio:
+                self.log("提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并")
             return
         url = self.url_var.get().strip()
         if not url:
