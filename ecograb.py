@@ -324,10 +324,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
 def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False):
     tmpdir = os.path.join(out_dir, f".ecograb_{task_id}")
     os.makedirs(tmpdir, exist_ok=True)
-    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist",
-           "-f", fmt_arg, "--merge-output-format", "mp4",
-           "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
-           "-c"]
+    cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist"]
+    if fmt_arg:
+        cmd += ["-f", fmt_arg]
+    if "googlevideo.com" in url or "/videoplayback" in url:
+        cmd += ["--referer", "https://www.youtube.com/"]
+    cmd += ["--merge-output-format", "mp4",
+            "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
+            "-c"]
     if use_cookie:
         cmd += cookie_args()
     cmd.append(url)
@@ -898,7 +902,7 @@ class App:
             vals = self.fmt_tree.item(row).get("values") or []
             is_audio = bool(vals and "音频" in str(vals[0]))
             name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
-            self.pool.add(url, "best/bestvideo+bestaudio", SCRIPT_DIR, None,
+            self.pool.add(url, None, SCRIPT_DIR, None,
                           name, self.cookie_var.get())
             if not is_audio:
                 self.log("提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并")
