@@ -1079,8 +1079,12 @@ class App:
         if bbox:
             _, y, _, h = bbox
             cb = self.fmt_tree.bbox(row, "codec")
-            x = cb[0] + cb[2] + 2 if cb else max(0, bbox[2] - 86)
-            self._dl_btn.place(x=x, y=y, width=82, height=max(18, h))
+            bw = 82
+            if cb:
+                x = cb[0] + cb[2] - bw
+            else:
+                x = max(0, bbox[2] - bw)
+            self._dl_btn.place(x=x, y=y, width=bw, height=max(18, h))
             self._dl_btn.config(command=lambda r=row: self._download_fmt_row(r))
 
     def _hide_dl_btn(self):
