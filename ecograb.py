@@ -370,22 +370,48 @@ class DownloadTask:
         total_bytes = 0
         _unit = {"KiB": 1024, "MiB": 1048576, "GiB": 1073741824}
 
+        # 兜底：yt-dlp 对某些直链（嗅探流）不输出进度行，先 HEAD 拿总大小
+        if self.url and not self.url.startswith("file://"):
+            try:
+                import urllib.request
+                req = urllib.request.Request(self.url, method="HEAD",
+                                             headers={"User-Agent": "Mozilla/5.0",
+                                                      "Referer": "https://www.youtube.com/"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    cl = r.headers.get("Content-Length")
+                    if cl:
+                        total_bytes = int(cl)
+            except Exception:
+                pass
+
         def poll_part():
             nonlocal total_bytes
             while self.state == "downloading":
                 if total_bytes > 0 and self.tmpdir and os.path.isdir(self.tmpdir):
                     got = 0
+                    name = None
                     try:
                         for f in os.listdir(self.tmpdir):
-                            if f.endswith(".part"):
-                                got += os.path.getsize(os.path.join(self.tmpdir, f))
+                            fp = os.path.join(self.tmpdir, f)
+                            if os.path.isfile(fp):
+                                got += os.path.getsize(fp)
+                                if not name or len(f) > len(name):
+                                    name = f
                     except OSError:
                         pass
+                    changed = False
+                    if name:
+                        n = name[:-5] if name.endswith(".part") else name
+                        n = re.sub(r"\.f\d+(?=\.)", "", n)
+                        if n and n != self.title:
+                            self.title = n
+                            changed = True
                     pct = min(99.9, got / total_bytes * 100)
                     if pct > self.progress:
                         self.progress = pct
-                        if self.ui:
-                            self.pool.on_task_update(self)
+                        changed = True
+                    if changed and self.ui:
+                        self.pool.on_task_update(self)
                 time.sleep(0.5)
 
         threading.Thread(target=poll_part, daemon=True).start()
@@ -400,17 +426,12 @@ class DownloadTask:
                     total_bytes = int(float(mm.group(1)) * _unit[mm.group(2)])
                 if self.ui:
                     self.pool.on_task_update(self)
-            else:
-                fm = re.search(r"(?:Destination|Merging formats into):?\s*(.+)", line)
-                if fm:
-                    name = os.path.basename(fm.group(1).strip().strip('"'))
-                    if name and name != self.title:
-                        self.title = name
-                        if self.ui:
-                            self.pool.on_task_update(self)
-                elif line.startswith("ERROR"):
-                    self.pool.log(f"下载错误：{line}")
+            elif line.startswith("ERROR"):
+                self.pool.log(f"下载错误：{line}")
         self.proc.wait()
+        if self.state == "paused":
+            self.pool.log("已暂停，断点保留，可点「继续」续传")
+            return
         ok = self.proc.returncode == 0
         out = None
         if self.tmpdir and os.path.isdir(self.tmpdir):
