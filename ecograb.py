@@ -632,8 +632,9 @@ class App:
         self.fmt_tree.pack(fill="both", expand=True)
         self.fmt_tree.bind("<Motion>", self._on_tree_motion)
         self.fmt_tree.bind("<Leave>", lambda e: self._hide_dl_btn())
-        self.fmt_tree.bind("<Button-1>", lambda e: self._hide_dl_btn())
-        self._dl_btn = ttk.Button(frm, text="⬇ 下载", width=8)
+        self.fmt_tree.bind("<Button-1>", self._on_tree_click)
+        self.fmt_tree.bind("<Double-1>", self._on_tree_double)
+        self._dl_btn = ttk.Button(self.fmt_tree, text="⬇ 下载", width=8)
         self._dl_btn.place_forget()
 
         # 下载池
@@ -653,6 +654,7 @@ class App:
         def paste(e):
             try:
                 if widget.clipboard_get():
+                    widget.delete(0, "end")
                     widget.event_generate("<<Paste>>")
             except Exception:
                 pass
@@ -767,9 +769,25 @@ class App:
         if any(u == url for u, in self.captured):
             return
         self.captured.append((url,))
-        kind = "m3u8" if ".m3u8" in url else "mpd" if ".mpd" in url else "mp4" if ".mp4" in url else "流"
+        mime = ""
+        try:
+            from urllib.parse import urlparse, parse_qs
+            mime = parse_qs(urlparse(url).query).get("mime", [""])[0]
+        except Exception:
+            mime = ""
+        if ".m3u8" in url:
+            kind = "m3u8"
+        elif ".mpd" in url:
+            kind = "mpd"
+        elif ".mp4" in url or mime.startswith("video/mp4"):
+            kind = "mp4"
+        elif "video/webm" in mime:
+            kind = "webm"
+        else:
+            kind = "流"
+        kind_label = {"mp4": "mp4", "webm": "webm", "m3u8": "HLS", "mpd": "DASH"}.get(kind, "未知")
         self.fmt_tree.insert("", 0, values=(
-            "嗅探·" + kind, "捕获", "—", "捕获地址", "嗅探"))
+            "嗅探·" + kind, "捕获", kind_label, "捕获流", "嗅探"))
         self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
         self.log(f"嗅探捕获：{url}")
 
@@ -803,7 +821,25 @@ class App:
                 f["res"] or "", f["id"], f"{codec} {warn}", fmt_size(f["size"]), "探测"))
         self.log(f"探测成功：{len(fmts)} 个格式")
 
+    def _mouse_on_dl_btn(self, e):
+        """鼠标当前是否落在下载按钮上（防止事件冒泡把按钮点走/藏掉）"""
+        try:
+            return self._dl_btn.winfo_containing(e.x_root, e.y_root) is self._dl_btn
+        except Exception:
+            return False
+
+    def _on_tree_click(self, e):
+        if not self._mouse_on_dl_btn(e):
+            self._hide_dl_btn()
+
+    def _on_tree_double(self, e):
+        row = self.fmt_tree.identify_row(e.y)
+        if row:
+            self._download_fmt_row(row)
+
     def _on_tree_motion(self, e):
+        if self._mouse_on_dl_btn(e):
+            return
         row = self.fmt_tree.identify_row(e.y)
         if not row:
             self._hide_dl_btn()
