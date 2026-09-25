@@ -649,27 +649,14 @@ class App:
         sb.pack(side="right", fill="y")
 
     def _make_rightclick_menu(self, widget):
-        """右键菜单：粘贴/复制/全选/清空（tkinter 默认没有右键粘贴）"""
-        menu = tk.Menu(widget, tearoff=0)
-
-        def show(e):
-            menu.delete(0, "end")
+        """右键直接粘贴（tkinter 默认没有右键粘贴）"""
+        def paste(e):
             try:
-                has_clip = bool(widget.clipboard_get())
+                if widget.clipboard_get():
+                    widget.event_generate("<<Paste>>")
             except Exception:
-                has_clip = False
-            if has_clip:
-                menu.add_command(label="粘贴", command=lambda: widget.event_generate("<<Paste>>"))
-            if widget.selection_present():
-                menu.add_command(label="复制", command=lambda: widget.event_generate("<<Copy>>"))
-            menu.add_command(label="全选", command=lambda: widget.event_generate("<<SelectAll>>"))
-            menu.add_command(label="清空", command=lambda: widget.delete(0, "end"))
-            try:
-                menu.tk_popup(e.x_root, e.y_root)
-            finally:
-                menu.grab_release()
-
-        widget.bind("<Button-3>", show)
+                pass
+        widget.bind("<Button-3>", paste)
 
         # 日志抽屉
         self._log_btn = ttk.Button(self.root, text="▸ 日志（调试）", command=self._toggle_log)
