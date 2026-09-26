@@ -227,6 +227,7 @@ class Sniffer:
         self._captured = False
         self._timeout_fired = False
         self._auto_clicked = False
+        self._base_path = None
 
     def start(self, url=""):
         browser = find_browser()
@@ -261,6 +262,17 @@ class Sniffer:
             if self.event_cb:
                 self.event_cb("timeout", None)
             self.stop()
+
+    def _vid_path(self, url):
+        """视频流的'主路径'：去掉文件名后的目录路径，用于区分同一视频的不同清晰度 vs 页面跳转/推荐流"""
+        try:
+            path = urllib.parse.urlparse(url).path
+            parts = [p for p in path.split("/") if p]
+            if parts:
+                parts = parts[:-1]
+            return "/".join(parts)
+        except Exception:
+            return None
 
     def _run(self):
         ws_url = None
@@ -329,6 +341,12 @@ class Sniffer:
                     headers = resp.get("headers", {})
                 if url and is_video_request(url, headers):
                     if url in self.seen:
+                        continue
+                    vp = self._vid_path(url)
+                    if self._base_path is None:
+                        self._base_path = vp
+                    elif vp and vp != self._base_path:
+                        self.log_cb(f"嗅探：检测到页面跳转/推荐视频流（与当前视频不同），已忽略：{url}")
                         continue
                     self.seen.add(url)
                     self._captured = True
