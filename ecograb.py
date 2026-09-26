@@ -338,38 +338,68 @@ class Sniffer:
                     pass
 
     def _auto_quality(self):
-        """尽力而为：在播放器里找清晰度按钮并点击高清晰度，触发网站加载更高码率流"""
+        """自动遍历清晰度档位：每轮点开菜单点下一个未试档位，等播放器重新加载捕获新流；
+        连续一轮无新流即结束（站点结构特殊时用户可手动切换继续捕获）"""
         time.sleep(1.5)
         if not self.running or not self.ws:
             return
-        try:
+        self.log_cb("嗅探：自动遍历清晰度档位（每个档位等待加载，通常 20~40 秒）")
+        for _ in range(6):
+            if not self.running or not self.ws:
+                return
+            before = len(self.seen)
             js = r"""(() => {
+  window.__ecograb_qidx = window.__ecograb_qidx || 0;
   const isQ = /^(自动|流畅|标清|高清|超清|蓝光|720p|720P|1080p|1080P|2k|2K|4k|4K)$/;
   const isMenu = /(清晰度|画质|quality|清晰|画質)/i;
-  // 1) 先点“清晰度/画质”按钮展开菜单
   const menuBtn = [...document.querySelectorAll('button,div,span,a')].find(e => {
     const t = (e.textContent || '').trim();
     return isMenu.test(t) && t.length <= 8 && e.children.length <= 2 && e.offsetParent !== null;
   });
-  if (menuBtn) menuBtn.click();
-  // 2) 菜单展开后点最高清晰度选项
+  if (!menuBtn) return 'no-menu';
+  const isOpen = [...document.querySelectorAll('li,div,span,button,a')].some(e => {
+    const t = (e.textContent || '').trim();
+    return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
+  });
+  if (!isOpen) menuBtn.click();
   setTimeout(() => {
     const els = [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
       const t = (e.textContent || '').trim();
       return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
     });
     if (!els.length) return;
-    const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P'];
-    const target = els.find(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); }) || els[els.length-1];
-    target.click();
+    const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P','标清','480p','480P','流畅','360p','自动'];
+    const texts = els.map(e => (e.textContent||'').trim());
+    const pos = order.findIndex(o => texts.some(t => t.startsWith(o)));
+    let idx = window.__ecograb_qidx || 0;
+    let chosen = null;
+    if (pos >= 0) {
+      const candidates = els.filter(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); });
+      chosen = candidates[Math.min(pos + idx, candidates.length - 1)] || null;
+    } else {
+      chosen = els[els.length - 1 - Math.min(idx, els.length - 1)] || null;
+    }
+    window.__ecograb_qidx = (window.__ecograb_qidx || 0) + 1;
+    if (chosen) chosen.click();
+    setTimeout(() => { try { menuBtn.click(); } catch(e){} }, 150);
   }, 300);
-  return menuBtn ? ('menu: ' + (menuBtn.textContent || '').trim()) : 'no quality menu';
+  return 'ok';
 })()"""
-            self.ws.send(json.dumps({"id": 60, "method": "Runtime.evaluate",
-                                     "params": {"expression": js, "returnByValue": True}}))
-            self.log_cb("嗅探：已尝试自动切换高清晰度（失败不影响已捕获的流）")
-        except Exception:
-            pass
+            try:
+                self.ws.send(json.dumps({"id": 70 + _, "method": "Runtime.evaluate",
+                                         "params": {"expression": js, "returnByValue": True}}))
+            except Exception:
+                return
+            waited = 0
+            while waited < 12 and len(self.seen) <= before:
+                time.sleep(1)
+                waited += 1
+                if not self.running or not self.ws:
+                    return
+            if len(self.seen) <= before:
+                self.log_cb(f"嗅探：第 {_+1} 轮切换未见新流，结束自动遍历（可手动切换清晰度继续捕获）")
+                return
+            self.log_cb(f"嗅探：第 {_+1} 轮切换完成，已捕获 {len(self.seen)} 个流")
 
     def stop(self):
         self.running = False
