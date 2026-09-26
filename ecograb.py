@@ -368,7 +368,7 @@ class Sniffer:
     def _auto_quality(self):
         """通用清晰度遍历（不依赖站点结构）：
         状态机 —— 0 找档位直显 / 找设置·清晰度按钮打开菜单 → 1 菜单开（找 Quality 子菜单或档位）→ 2 逐个点档位。
-        每轮固定等待 5 秒（点档位时新流 2~5 秒出现），最多 8 轮（40 秒封顶）。"""
+        每轮固定等待 3 秒（点档位/API 切换时新流 1~3 秒出现，捕获是事件驱动不丢流），最多 8 轮（约 25 秒封顶）。"""
         time.sleep(1.5)
         if not self.running or not self.ws:
             return
@@ -490,7 +490,7 @@ class Sniffer:
                                          "params": {"expression": js, "returnByValue": True}}))
             except Exception:
                 return
-            time.sleep(5)
+            time.sleep(3)
             if not self.running or not self.ws:
                 return
             if len(self.seen) > before:
