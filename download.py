@@ -6,7 +6,7 @@ import os
 
 def cookie_args():
     """YouTube 风控绕过：使用嗅探浏览器(.chrome_profile)的登录态 cookie；不存在则不带"""
-    profile = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".chrome_profile")
+    profile = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".eazyvid_profile")
     if os.path.isdir(profile):
         return ["--cookies-from-browser", f"chrome:{profile}"]
     return []
