@@ -1121,6 +1121,12 @@ class App:
     def _show_log(self, msg):
         self.log_text.config(state="normal")
         self.log_text.insert("end", msg + "\n")
+        try:
+            lines = int(self.log_text.index("end-1c").split(".")[0])
+            if lines > 500:
+                self.log_text.delete("1.0", f"{lines - 300}.0")
+        except Exception:
+            pass
         self.log_text.see("end")
         self.log_text.config(state="disabled")
         try:
@@ -1140,9 +1146,11 @@ class App:
             self.log_visible = True
 
     def _poll_queue(self):
+        n = 0
         try:
-            while True:
+            while n < 200:
                 item = self.q.get_nowait()
+                n += 1
                 kind = item[0]
                 if kind == "log":
                     self._show_log(item[1])
