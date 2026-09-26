@@ -1069,6 +1069,7 @@ class App:
         self.root = root
         root.title("ECOgrab 视频下载压缩工具")
         root.geometry("980x820")
+        self._cleanup_stale_tmpdirs()
         self.q = queue.Queue()
         self.sniffer = None
         self.current_info = None
@@ -1085,6 +1086,29 @@ class App:
         self._build_ui()
         self._start_capture_server()
         root.after(100, self._poll_queue)
+
+    def _cleanup_stale_tmpdirs(self):
+        """启动时清理历史残留的下载临时目录（仅超过 10 分钟、且非当前进程的）"""
+        try:
+            cur = os.getpid()
+            cutoff = time.time() - 600
+            bases = {SCRIPT_DIR, os.path.join(os.path.expanduser("~"), "Downloads"),
+                     r"D:\Documents\Downloads"}
+            for base in bases:
+                if not os.path.isdir(base):
+                    continue
+                for d in os.listdir(base):
+                    if not d.startswith(".ecograb_"):
+                        continue
+                    p = os.path.join(base, d)
+                    try:
+                        if os.path.isdir(p) and os.path.getmtime(p) < cutoff \
+                                and f"_{cur}" not in d:
+                            shutil.rmtree(p, ignore_errors=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def _build_ui(self):
         pad = {"padx": 8, "pady": 4}
