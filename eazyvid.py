@@ -1476,6 +1476,11 @@ class App:
             self.q.put(("sniff_timeout",))
 
     def _on_capture_url(self, url):
+        # HLS 分片（.ts/.m4s/seg-N…）：不逐个入列，避免列表爆炸/后台忙死。
+        # 宿主 m3u8 通常会被网络层一并捕获（video src 即清单）；分片只做兜底反推。
+        if self._is_hls_segment(url):
+            self._merge_hls_segment(url)
+            return
         if any(u == url for u, in self.captured):
             return
         self.captured.append((url,))
@@ -1519,6 +1524,52 @@ class App:
             self.log(f"嗅探捕获音频流：{url}")
         else:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
+
+    @staticmethod
+    def _is_hls_segment(url):
+        try:
+            path = urllib.parse.urlparse(url).path.lower()
+        except Exception:
+            return False
+        if ".m3u8" in path:
+            return False
+        if re.search(r'\.(ts|m4s|aac|m4a)(\?|$)', path):
+            return True
+        if re.search(r'(seg|chunk|media|part)[-_]?\d+(\.|/|$)', path):
+            return True
+        return False
+
+    def _merge_hls_segment(self, url):
+        try:
+            p = urllib.parse.urlparse(url)
+        except Exception:
+            return
+        key = p.path.rsplit('/', 1)[0]
+        tried = getattr(self, "_hls_tried", None)
+        if tried is None:
+            tried = self._hls_tried = set()
+        if key in tried:
+            return
+        tried.add(key)
+        threading.Thread(target=self._infer_hls_playlist, args=(url,), daemon=True).start()
+
+    def _infer_hls_playlist(self, url):
+        try:
+            p = urllib.parse.urlparse(url)
+        except Exception:
+            return
+        base = p.path.rsplit('/', 1)[0] + '/'
+        for name in ("index.m3u8", "master.m3u8", "playlist.m3u8"):
+            cand = "{0}://{1}{2}{3}".format(p.scheme, p.netloc, base, name)
+            if p.query:
+                cand += "?" + p.query
+            if any(u == cand for u, in self.captured):
+                return
+            if self._head_size(cand):
+                self.log("嗅探：HLS 分片归并 → 宿主清单 " + cand)
+                self.q.put(("capture", cand))
+                return
+        self.log("嗅探：忽略 HLS 分片（未找到宿主清单）" + url[:80])
 
     def _probe_capture(self, url, iid):
         """捕获流后台探测（并行）：URL 猜分辨率立即显示 → HEAD 拿大小 → -J 后台补精确。
