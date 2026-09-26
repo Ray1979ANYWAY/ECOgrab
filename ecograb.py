@@ -133,7 +133,7 @@ def probe_url(url, timeout=90):
         r = subprocess.run(
             [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist"] + cookie_args() + ["-J", url],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
-            creationflags=NO_WINDOW)
+            creationflags=NO_WINDOW | 0x00004000)
     except subprocess.TimeoutExpired:
         return None, "探测超时（90秒），可能是网络慢或需要代理"
     if r.returncode != 0:
@@ -650,7 +650,7 @@ def _kill_proc_tree(proc):
     try:
         if proc.poll() is None:
             subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                           capture_output=True, timeout=5, creationflags=NO_WINDOW)
+                           capture_output=True, timeout=5, creationflags=NO_WINDOW | 0x00004000)
     except Exception:
         pass
     try:
@@ -707,7 +707,7 @@ class DownloadTask:
                 args += ["--referer", self.referer]
             args.append(self.url)
             r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=25, creationflags=NO_WINDOW)
+                               errors="replace", timeout=25, creationflags=NO_WINDOW | 0x00004000)
             if r.returncode != 0:
                 return
             info = json.loads(r.stdout)
@@ -921,7 +921,7 @@ def get_duration(path):
         r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
                             "-of", "json", path], capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=30,
-                           creationflags=NO_WINDOW)
+                           creationflags=NO_WINDOW | 0x00004000)
         d = json.loads(r.stdout).get("format", {}).get("duration")
         return float(d) if d else None
     except Exception:
@@ -1466,7 +1466,7 @@ class App:
                 args += ["--referer", ref]
             args.append(url)
             r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=60, creationflags=NO_WINDOW)
+                               errors="replace", timeout=60, creationflags=NO_WINDOW | 0x00004000)
             if r.returncode == 0:
                 info = json.loads(r.stdout)
                 size2 = info.get("filesize") or info.get("filesize_approx")
@@ -1518,7 +1518,7 @@ class App:
                 args += ["--referer", ref]
             args.append(url)
             r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=90, creationflags=NO_WINDOW)
+                               errors="replace", timeout=90, creationflags=NO_WINDOW | 0x00004000)
             if r.returncode != 0:
                 self.q.put(("hls_fail", ph, (r.stderr or r.stdout or "")[-300:]))
                 return
