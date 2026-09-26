@@ -11,3 +11,6 @@ deno.exe
 # Python
 __pycache__/
 *.pyc
+
+# 本地运行日志（不入库）
+ecograb.log
