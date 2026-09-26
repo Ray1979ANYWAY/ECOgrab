@@ -418,11 +418,13 @@ class Sniffer:
     } catch(e) {}
   }
   if (window.__eq_api === 'jw') {
-    const idx = window.__eq_api_idx || 0;
     const levels = window.__eq_api_levels || [];
-    if (idx < levels.length) {
-      window.__eq_api_idx = idx + 1;
-      try { jwplayer().setCurrentQuality(idx); console.log('EQ api click: ' + levels[idx]); }
+    const total = levels.length;
+    const step = window.__eq_api_idx || 0;
+    if (step < total) {
+      const target = total - 1 - step;
+      window.__eq_api_idx = step + 1;
+      try { jwplayer().setCurrentQuality(target); console.log('EQ api click: ' + levels[target]); }
       catch(e) { console.log('EQ api err'); }
     } else { window.__eq_state = 9; console.log('EQ api done'); }
     return 'ok';
