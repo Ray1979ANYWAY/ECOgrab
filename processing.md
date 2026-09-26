@@ -235,3 +235,9 @@
 ### 其它
 - 提示窗口（"视频文件藏得比较深"）定位到主窗口正中间。
 - GitHub 推送与网络：AI reality 节点挂 → git push `schannel: failed to receive handshake, SSL/TLS connection failed`（exit 128）；本地 commit 全部安全，节点恢复后补推。
+
+
+### 验证（用户实测 2026-09-26 下午）
+- 统一 BELOW_NORMAL + taskkill 杀进程树后：**界面不再卡顿**（"对，没那么卡了"）——坑 1/坑 2 闭环。
+- 累积 commit（进程树修复、全子进程降优先级、processing.md 阶段八）在节点恢复后已推送 GitHub（eb1c693..8709e89）。
+- 遗留观察：节点不稳定期 git push 会 SSL/RPC 中断，本地 commit 安全，恢复后补推即可。
