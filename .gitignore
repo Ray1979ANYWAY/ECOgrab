@@ -1,5 +1,5 @@
 # 浏览器嗅探 profile（含登录态，隐私，绝不推送）
-.chrome_profile/
+.eazyvid_profile/
 
 # 超过 GitHub 100MB 单文件上限，README 提供官方下载链接
 ffmpeg.exe
@@ -13,4 +13,4 @@ __pycache__/
 *.pyc
 
 # 本地运行日志（不入库）
-ecograb.log
+eazyvid.log

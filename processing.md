@@ -1,4 +1,7 @@
-# ECOgrab 项目工作记录（processing.md）
+# eazyVid 项目工作记录（processing.md）
+
+> **2026-09-26 改名**：项目由 **ECOgrab** 正式更名为 **eazyVid**（本地文件夹 `D:\Documents\eazyVid`、GitHub 仓库 `Ray1979ANYWAY/eazyVid`、主程序 `eazyvid.py`、日志 `eazyvid.log`、嗅探 profile `.eazyvid_profile`、cookie 临时前缀 `eazyvid_ck_*`/`eazyvid_cookies_*`、下载临时目录 `.eazyvid_*`）。
+> 改名原因：ECOgrab 无法从名字看出与视频下载/压缩相关；easyVDO 撞车泰语视频教育站（easyvdo.com）+ 大陆集团 VDO 汽车品牌；标准拼写 easyVid 撞车活跃 AI 视频平台（easyvid.app）与 EasyVid Video Converter；最终选定 **eazyVid**——eazy→easy 联想、vid→video 联想 100%，非标准拼写恰好避开全部撞名。**本日志此条之前的条目保留"ECOgrab"原名，如实反映当时历史。**
 
 > 记录从项目建立到当前的全部思路过程与工作过程，供后续迭代回溯。
 

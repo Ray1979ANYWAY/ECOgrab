@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""ECOgrab v2 GUI 冒烟测试：构建窗口、弹窗、捕获提示、下载池行"""
+"""eazyVid v2 GUI 冒烟测试：构建窗口、弹窗、捕获提示、下载池行"""
 import sys, os
-sys.path.insert(0, r'D:\Documents\ECOgrab')
+sys.path.insert(0, r'D:\Documents\eazyVid')
 import tkinter as tk
-import ecograb as E
+import eazyvid as E
 
 root = tk.Tk()
 app = E.App(root)
@@ -33,7 +33,7 @@ assert "嗅探" in app.fmt_tree.item(items[0], "values")[4], app.fmt_tree.item(i
 print("3. 嗅探捕获入列表 + tooltip OK", flush=True)
 
 # 下载池行组件（不触发真实下载）
-t = E.DownloadTask("http://x/v", "18", r'D:\Documents\ECOgrab', None, "测试任务", app.pool, 99)
+t = E.DownloadTask("http://x/v", "18", r'D:\Documents\eazyVid', None, "测试任务", app.pool, 99)
 row = E.TaskRow(app._pool_inner, t, app)
 t.ui = row
 row.refresh()
