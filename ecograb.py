@@ -90,11 +90,9 @@ def cookie_args():
     src_cookies = os.path.join(CHROME_PROFILE, "Default", "Network", "Cookies")
     if not os.path.exists(src_cookies):
         return []
-    tmp = os.path.join(tempfile.gettempdir(), "ecograb_ck")
+    tmp = os.path.join(tempfile.gettempdir(), "ecograb_ck_" + str(os.getpid()))
     for _ in range(4):
         try:
-            if os.path.exists(tmp):
-                shutil.rmtree(tmp, ignore_errors=True)
             os.makedirs(os.path.join(tmp, "Default", "Network"), exist_ok=True)
             ls = os.path.join(CHROME_PROFILE, "Local State")
             if os.path.exists(ls):
