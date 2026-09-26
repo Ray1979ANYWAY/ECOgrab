@@ -342,7 +342,7 @@ def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False, referer=None)
 
 class DownloadTask:
     """单个下载任务；state: waiting/downloading/paused/done/failed"""
-    def __init__(self, url, fmt_arg, out_dir, mode, title, pool, task_id, use_cookie=False, referer=None):
+    def __init__(self, url, fmt_arg, out_dir, mode, title, pool, task_id, use_cookie=False, referer=None, size=None):
         self.url = url
         self.fmt_arg = fmt_arg
         self.out_dir = out_dir
@@ -355,9 +355,9 @@ class DownloadTask:
         self.state = "waiting"
         self.progress = 0.0
         self.size_str = ""
-        self.total_known = False
+        self.total_known = bool(size)
         self.dl_bytes = 0
-        self._total_bytes = 0
+        self._total_bytes = int(size) if size else 0
         self.proc = None
         self.out_path = None
         self.tmpdir = None
@@ -427,15 +427,22 @@ class DownloadTask:
                 if self.tmpdir and os.path.isdir(self.tmpdir):
                     got = 0
                     name = None
+                    npart = []
                     try:
                         for f in os.listdir(self.tmpdir):
                             fp = os.path.join(self.tmpdir, f)
-                            if os.path.isfile(fp):
+                            if not os.path.isfile(fp):
+                                continue
+                            if f.endswith(".part"):
                                 got += os.path.getsize(fp)
-                                if not name or len(f) > len(name):
-                                    name = f
+                            elif not f.endswith((".ytdl", ".json")):
+                                npart.append(os.path.getsize(fp))
+                            if not name or len(f) > len(name):
+                                name = f
                     except OSError:
                         pass
+                    if npart:
+                        got += max(npart)
                     changed = False
                     if name:
                         n = name[:-5] if name.endswith(".part") else name
@@ -541,10 +548,10 @@ class DownloadPool:
         self.on_update = on_update
         self.log = log_cb
 
-    def add(self, url, fmt_arg, out_dir, mode, title, use_cookie=False, referer=None):
+    def add(self, url, fmt_arg, out_dir, mode, title, use_cookie=False, referer=None, size=None):
         self.task_seq += 1
         t = DownloadTask(url, fmt_arg, out_dir, mode, title, self, self.task_seq,
-                         use_cookie, referer)
+                         use_cookie, referer, size=size)
         self.tasks.append(t)
         self.on_update(("added", t))
         threading.Thread(target=self._schedule, args=(t,), daemon=True).start()
@@ -1166,9 +1173,10 @@ class App:
                     url = self.hls_urls[int(bi)]
                 except Exception:
                     return
+                fsz = fmt.get("filesize") or fmt.get("filesize_approx")
                 self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                               f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
-                              referer=self._sniff_referer())
+                              referer=self._sniff_referer(), size=fsz)
                 self.log(f"加入下载池：{fmt['res'] or fmt['id']}（HLS 格式 {fmt['id']}）")
                 return
             url = self._capture_url_for_row(row)
@@ -1189,9 +1197,11 @@ class App:
         info = getattr(self, "current_info", None) or {}
         t = (info.get("title") or "").strip() or f"{fmt['res'] or fmt['id']} · {fmt['id']}"
         ext = fmt.get("ext") or "mp4"
+        fsz = fmt.get("filesize") or fmt.get("filesize_approx")
         self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                       f"{t}.{ext}", True,
-                      referer=url if not url.startswith("about:") else None)
+                      referer=url if not url.startswith("about:") else None,
+                      size=fsz)
         self.log(f"加入下载池：{fmt['res'] or fmt['id']}（格式 {fmt['id']}）")
 
     def _capture_url_for_row(self, row):
