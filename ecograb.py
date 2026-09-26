@@ -398,6 +398,29 @@ class Sniffer:
     const okText = /^(settings|设置|齿轮)$/i.test(t);
     return (okAttr || okText) && e.children.length <= 2;
   });
+  if ((window.__eq_dump === undefined)) {
+    window.__eq_dump = 1;
+    const cands = [...root.querySelectorAll('button,div,span,a')].filter(e => {
+      const a = ((e.getAttribute('aria-label')||'') + ' ' + (e.getAttribute('title')||'') + ' ' + (e.className||''));
+      return /(settings|设置|gear|quality)/i.test(a) || /(settings|设置|gear|quality|画质|清晰)/i.test((e.textContent||'').trim());
+    });
+    console.log('EQ cands: ' + JSON.stringify(cands.slice(0, 12).map(e => ({
+      tag: e.tagName, aria: e.getAttribute('aria-label')||'', title: e.getAttribute('title')||'',
+      cls: (e.className||'').toString().slice(0, 50), txt: (e.textContent||'').trim().slice(0, 30), vis: e.offsetParent!==null
+    }))));
+    const menuEls = [...root.querySelectorAll('.jw-settings-menu, .jw-menu, [class*=settings-menu], [class*=menu]')];
+    console.log('EQ menus: ' + JSON.stringify(menuEls.slice(0, 5).map(e => ({
+      cls: (e.className||'').toString().slice(0, 60), vis: e.offsetParent!==null, txt: (e.textContent||'').trim().slice(0, 80)
+    }))));
+  }
+  if ((window.__eq_st1_dump === undefined) && st === 1) {
+    window.__eq_st1_dump = 1;
+    const visibles = [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
+      const t = (e.textContent||'').trim();
+      return t && t.length <= 12 && e.offsetParent !== null;
+    });
+    console.log('EQ st1 dump: ' + JSON.stringify([...new Set(visibles.map(e => (e.textContent||'').trim()))].slice(0, 30)));
+  }
   const findSub = (scope) => [...scope.querySelectorAll('.jw-menu-item, .jw-settings-content-item, li, div, span, button, a')].find(e => {
     const t = (e.textContent || '').trim();
     const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
