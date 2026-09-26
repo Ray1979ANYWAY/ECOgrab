@@ -358,6 +358,20 @@ class Sniffer:
             if not self.running or not self.ws:
                 return
             before = len(self.seen)
+            if _ == 0:
+                try:
+                    dump_js = r"""(() => {
+  const items = [...document.querySelectorAll('button,div,span,a')]
+    .filter(e => { const t=(e.textContent||'').trim(); return t && t.length<=8 && e.offsetParent!==null; })
+    .map(e => (e.textContent||'').trim());
+  const uniq = [...new Set(items)].slice(0, 40);
+  console.log('UI dump: ' + JSON.stringify(uniq));
+  return 'ok';
+})()"""
+                    self.ws.send(json.dumps({"id": 65, "method": "Runtime.evaluate",
+                                             "params": {"expression": dump_js, "returnByValue": True}}))
+                except Exception:
+                    pass
             js = r"""(() => {
   window.__ecograb_qidx = window.__ecograb_qidx || 0;
   const isQ = /^(自动|流畅|标清|高清|超清|蓝光|720p|720P|1080p|1080P|2k|2K|4k|4K)$/;
