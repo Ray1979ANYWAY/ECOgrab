@@ -192,3 +192,46 @@
 5. `is_video_request` 补 googlevideo/videoplayback 特征兜底（YouTube 无扩展名流）
 **验证**：download.py 探测 ytsearch1:hello 成功（全格式列表）；test_v2.py 5 组全 PASS（断言同步更新）
 **遗留**：IP 被风控时未登录仍可能拦截 → 换干净节点（日/新/住宅 IP）；嗅探窗口登录态需保持；用户主 Chrome 的 cookie 通道（7271）未解，靠 .chrome_profile 绕开
+
+
+## 阶段八：下载/性能/稳定性调试（2026-09-26 下午）
+
+### 坑 1：删除任务后 yt-dlp 还在下载（孤儿进程）
+**现象**：删除下载中任务后流速仍有 1~2MB/s；"暂停后过一会儿失败"。
+**根因**：yt-dlp.exe 是 pyinstaller onefile 双进程架构（bootloader 父进程 + 真正下载的子进程）。`terminate()` 只杀父进程，子进程变孤儿继续下载；`.part` 被占用导致 rmtree 也失败。
+**修复**：`_kill_proc_tree()` 用 `taskkill /PID /T /F` 杀整个进程树（删除/暂停都走它），杀完 wait 回收再删 tmpdir。实测系统里曾有 2 个孤儿 yt-dlp 进程，已清。
+**洞见**：Windows 上 terminate() 对打包型 exe 不可靠，杀进程一律杀树。
+
+### 坑 2：GUI 卡顿（下载后随机卡、删了还占 CPU）——两次误判
+**误判 A**：怀疑下载完自动压缩（ffmpeg）吃 CPU——**用户实测没选压缩、CPU<40%，排除**。
+**误判 B**：怀疑 cookie CDP 同步阻塞——只解决"点下载那一瞬间"，下载后仍卡。
+**真凶（多因素叠加）**：嗅探 Chrome（普通优先级）一直开着 + yt-dlp 子进程普通优先级抢 UI + 孤儿进程残留。
+**为什么脚本不卡**：download.py 无 GUI 主线程（没有"界面卡"概念）、无嗅探 Chrome；yt-dlp 下载本身是网络/IO 型，CPU 很低。GUI 卡 = 界面线程被普通优先级子进程抢占 + 多余 Chrome 进程。
+**修复**：所有子进程统一 `BELOW_NORMAL_PRIORITY_CLASS`（0x4000）：嗅探 Chrome、yt-dlp 下载、探测/-J、预探测、HLS 解析、HEAD、压缩 ffmpeg。
+**洞见**：GUI 应用里凡是有可能长期运行的子进程（下载/解码/压缩）一律降优先级；用户侧再配合下载目录加 Defender 排除 + 用完关嗅探窗。
+
+### 坑 3：下载进度从 50% 起跳
+**根因**：临时目录 `.ecograb_{task_id}` 的 task_id 是进程内递增序号，**重启后从 1 重置** → 新任务复用旧残留目录（上次中断的 .part 500MB）→ yt-dlp `-c` 续传 → 从 50% 开始。
+**修复**：tmpdir 加进程号 `.ecograb_{task_id}_{pid}`；启动时清理超过 10 分钟的 `.ecograb_*` 残留（排除当前 pid）。
+
+### 坑 4：清晰度遍历"碰运气"（mat6tube）
+**现象**：有时 4 档全抓到，有时丢档。
+**根因**：`setCurrentQuality` 首档（240，低→高顺序第一个）调用时机太早（播放器刚就绪）抛异常，而 `idx+1` 在 try 之前 → 档位被永久跳过（3/4 次丢 240）。
+**修复**：失败重试同档最多 2 次，成功才推进。实测 13:28 稳定 240→360→480→720 全抓。
+**洞见**：JW Player `getQualityLevels()` 返回顺序 = 高→低；`setCurrentQuality(0)`（最高档）因 JW 视其为"当前档位"不触发重新拉流（UI 标记 720 active，实际 CDP 拉 480 = 带宽自适应）——**切换必须低→高**，最高档最后请求必拉流。
+
+### 坑 5：cookie CDP 同步阻塞主线程
+**现象**：点下载卡一阵、最小化恢复黑屏（主线程无法重绘）。
+**根因**：`cookie_args()` 的 CDP `Network.getAllCookies` 同步等 Chrome 响应 1~2s，在 DownloadTask.start（主线程）调用。
+**修复**：`_COOKIE_CACHE` 缓存 120s——探测/预探测的后台线程已取过，下载启动直接命中。
+**洞见**：一切可能阻塞主线程的外部调用（CDP/网络）要么后台化，要么缓存。
+
+### 坑 6：tooltip 位置
+主窗口 tooltip 对"回主窗口下载"的提醒无意义 → 改为 CDP `Runtime.evaluate` 注入播放页 DOM（右上角浮动条，6 秒自动消失），注入失败才兜底主窗口。
+
+### 坑 7：测试断言鲁棒性
+嗅探 Chrome 正开着锁 `.chrome_profile` 时，测试环境的 cookie 副本复制会失败 → cookie 断言改为容忍 CDP 或副本任一路径。
+
+### 其它
+- 提示窗口（"视频文件藏得比较深"）定位到主窗口正中间。
+- GitHub 推送与网络：AI reality 节点挂 → git push `schannel: failed to receive handshake, SSL/TLS connection failed`（exit 128）；本地 commit 全部安全，节点恢复后补推。
