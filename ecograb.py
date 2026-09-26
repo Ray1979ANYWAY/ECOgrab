@@ -297,6 +297,7 @@ class Sniffer:
             import websocket
             self.ws = websocket.create_connection(ws_url, timeout=15)
             self.ws.send(json.dumps({"id": 1, "method": "Network.enable"}))
+            self.ws.send(json.dumps({"id": 2, "method": "Runtime.enable"}))
             self.log_cb("嗅探：已连接，请在播放窗口打开/刷新视频页并点击播放")
             while self.running:
                 try:
@@ -307,6 +308,15 @@ class Sniffer:
                     break
                 method = msg.get("method", "")
                 params = msg.get("params", {})
+                if method == "Runtime.consoleAPICalled":
+                    try:
+                        args_ = params.get("args", [])
+                        text = " ".join((a.get("value") if isinstance(a.get("value"), str) else str(a.get("value", ""))) for a in args_)
+                        if text:
+                            self.log_cb("嗅探JS: " + text)
+                    except Exception:
+                        pass
+                    continue
                 url = None
                 headers = {}
                 if method == "Network.requestWillBeSent":
@@ -356,18 +366,19 @@ class Sniffer:
     const t = (e.textContent || '').trim();
     return isMenu.test(t) && t.length <= 8 && e.children.length <= 2 && e.offsetParent !== null;
   });
-  if (!menuBtn) return 'no-menu';
+  if (!menuBtn) { console.log('Q round: no quality menu'); return 'no-menu'; }
   const isOpen = [...document.querySelectorAll('li,div,span,button,a')].some(e => {
     const t = (e.textContent || '').trim();
     return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
   });
+  console.log('Q round: menu=' + (menuBtn.textContent||'').trim() + ' open=' + isOpen);
   if (!isOpen) menuBtn.click();
   setTimeout(() => {
     const els = [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
       const t = (e.textContent || '').trim();
       return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
     });
-    if (!els.length) return;
+    if (!els.length) { console.log('Q round: no visible options'); return; }
     const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P','标清','480p','480P','流畅','360p','自动'];
     const texts = els.map(e => (e.textContent||'').trim());
     const pos = order.findIndex(o => texts.some(t => t.startsWith(o)));
@@ -380,9 +391,9 @@ class Sniffer:
       chosen = els[els.length - 1 - Math.min(idx, els.length - 1)] || null;
     }
     window.__ecograb_qidx = (window.__ecograb_qidx || 0) + 1;
-    if (chosen) chosen.click();
-    setTimeout(() => { try { menuBtn.click(); } catch(e){} }, 150);
-  }, 300);
+    if (chosen) { chosen.click(); console.log('Q round: clicked ' + (chosen.textContent||'').trim()); }
+    else console.log('Q round: nothing to click');
+  }, 600);
   return 'ok';
 })()"""
             try:
@@ -1196,6 +1207,9 @@ class App:
         size = self._head_size(url)
         if size:
             self.q.put(("cap_info", url, iid, size, f"~{h}p" if h else ""))
+            self.log(f"探测 {url[-60:]}：HEAD 大小 {format_size(size)}")
+        else:
+            self.log(f"探测 {url[-60:]}：HEAD 失败（无大小），等 yt-dlp -J 兜底")
 
     def _probe_j(self, url, iid, h):
         """yt-dlp -J 后台补精确分辨率/大小（不覆盖 HEAD 已拿到的大小）"""
@@ -1217,8 +1231,11 @@ class App:
                     old = self.cap_meta.get(url) or {}
                     self.q.put(("cap_info", url, iid, size2 or old.get("size"),
                                 (f"{w2}x{h2}" if h2 else (f"~{h}p" if h else ""))))
-        except Exception:
-            pass
+                    self.log(f"探测 {url[-60:]}：-J 精确 {w2}x{h2} / {format_size(size2) if size2 else '无大小'}")
+            else:
+                self.log(f"探测 {url[-60:]}：-J 失败 rc={r.returncode}（{((r.stderr or '').strip().splitlines() or [''])[-1][:120]}）")
+        except Exception as e:
+            self.log(f"探测 {url[-60:]}：-J 异常 {e}")
 
     def _head_size(self, url):
         """HEAD 拿 Content-Length；被拦则 GET Range: bytes=0-0 从 Content-Range 取总大小"""
