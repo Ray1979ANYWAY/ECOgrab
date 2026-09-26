@@ -311,15 +311,25 @@ class Sniffer:
         try:
             js = r"""(() => {
   const isQ = /^(自动|流畅|标清|高清|超清|蓝光|720p|720P|1080p|1080P|2k|2K|4k|4K)$/;
-  const els = [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
+  const isMenu = /(清晰度|画质|quality|清晰|画質)/i;
+  // 1) 先点“清晰度/画质”按钮展开菜单
+  const menuBtn = [...document.querySelectorAll('button,div,span,a')].find(e => {
     const t = (e.textContent || '').trim();
-    return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
+    return isMenu.test(t) && t.length <= 8 && e.children.length <= 2 && e.offsetParent !== null;
   });
-  if (!els.length) return 'no quality menu found';
-  const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P'];
-  const target = els.find(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); }) || els[els.length-1];
-  target.click();
-  return 'clicked: ' + (target.textContent || '').trim();
+  if (menuBtn) menuBtn.click();
+  // 2) 菜单展开后点最高清晰度选项
+  setTimeout(() => {
+    const els = [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
+      const t = (e.textContent || '').trim();
+      return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
+    });
+    if (!els.length) return;
+    const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P'];
+    const target = els.find(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); }) || els[els.length-1];
+    target.click();
+  }, 300);
+  return menuBtn ? ('menu: ' + (menuBtn.textContent || '').trim()) : 'no quality menu';
 })()"""
             self.ws.send(json.dumps({"id": 60, "method": "Runtime.evaluate",
                                      "params": {"expression": js, "returnByValue": True}}))
@@ -549,6 +559,10 @@ class DownloadTask:
             self.state = "done"
         else:
             self.state = "failed"
+            if not ok:
+                self.pool.log(f"下载失败（退出码 {self.proc.returncode}）：{self.url}")
+            else:
+                self.pool.log(f"下载进程正常退出但未找到成品文件，请查看下方日志；URL：{self.url}")
         self.progress = 100.0 if ok else self.progress
         self.pool.on_task_done(self)
 
@@ -811,6 +825,7 @@ class TaskRow:
             self.pause_btn.config(state="disabled")
             self.resume_btn.config(state="normal", text="重新下载")
             self._grey(True)
+            self.resume_btn.config(state="normal")
 
     def show_compress(self, pct):
         if pct is None:
@@ -1092,7 +1107,9 @@ class App:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
 
     def _probe_capture(self, url, iid):
-        """捕获流后台探测：yt-dlp -J 拿大小和清晰度，更新列表行 + 供下载传 size"""
+        """捕获流后台探测：yt-dlp -J 拿大小/清晰度；-J 拿不到大小就 HEAD/Range 兜底；分辨率从 URL 猜"""
+        size = None
+        h = w = 0
         try:
             args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
             args += cookie_args()
@@ -1102,15 +1119,49 @@ class App:
             args.append(url)
             r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
                                errors="replace", timeout=60, creationflags=NO_WINDOW)
-            if r.returncode != 0:
-                return
-            info = json.loads(r.stdout)
-            size = info.get("filesize") or info.get("filesize_approx")
-            h = info.get("height") or 0
-            w = info.get("width") or 0
-            self.q.put(("cap_info", url, iid, size, (f"{w}x{h}" if h else "")))
+            if r.returncode == 0:
+                try:
+                    info = json.loads(r.stdout)
+                    size = info.get("filesize") or info.get("filesize_approx")
+                    h = info.get("height") or 0
+                    w = info.get("width") or 0
+                except Exception:
+                    pass
         except Exception:
             pass
+        if not size:
+            size = self._head_size(url)
+        if not h:
+            m = re.search(r"(?:^|[/_.-])(\d{3,4})p(?=[/_.-]|$)", url, re.I)
+            h = int(m.group(1)) if m else 0
+        self.q.put(("cap_info", url, iid, size, (f"{w}x{h}" if h else "")))
+
+    def _head_size(self, url):
+        """HEAD 拿 Content-Length；被拦则 GET Range: bytes=0-0 从 Content-Range 取总大小"""
+        try:
+            import urllib.request
+            ref = self._sniff_referer() or ""
+            for method, headers, is_range in (
+                ("HEAD", {"User-Agent": "Mozilla/5.0", "Referer": ref}, False),
+                ("GET", {"User-Agent": "Mozilla/5.0", "Referer": ref, "Range": "bytes=0-0"}, True),
+            ):
+                try:
+                    req = urllib.request.Request(url, method=method, headers=headers)
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        if is_range:
+                            cr = r.headers.get("Content-Range") or ""
+                            m = re.search(r"/\s*(\d+)\s*$", cr)
+                            if m:
+                                return int(m.group(1))
+                        else:
+                            cl = r.headers.get("Content-Length")
+                            if cl:
+                                return int(cl)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return None
 
     def _probe_hls(self, url, ph):
         try:
