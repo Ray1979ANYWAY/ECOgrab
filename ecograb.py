@@ -747,7 +747,7 @@ class TaskRow:
             mb = self.task.dl_bytes / 1048576
             self.pct["text"] = f"已下 {mb:.0f}MB" if mb >= 1 else f"已下 {int(self.task.dl_bytes)}B"
         elif self.task.state == "downloading" and self.task.size_str:
-            self.pct["text"] = f"{self.task.progress:.0f}% ({self.task.size_str})"
+            self.pct["text"] = f"{self.task.progress:.0f}%（共 {self.task.size_str}）"
         else:
             self.pct["text"] = f"{self.task.progress:.0f}%"
         if s == "waiting":
