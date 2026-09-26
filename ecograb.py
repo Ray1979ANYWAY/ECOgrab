@@ -263,7 +263,7 @@ class Sniffer:
                "--disable-features=ExtensionsToolbarMenu,Translate,ReadingList,BookmarkBar",
                f"--app={url or 'about:blank'}"]
         try:
-            self.proc = subprocess.Popen(cmd)
+            self.proc = subprocess.Popen(cmd, creationflags=0x00004000)  # BELOW_NORMAL：嗅探 Chrome 不抢界面
         except OSError as e:
             return f"启动浏览器失败: {e}"
         self.start_url = url or "about:blank"
@@ -670,7 +670,7 @@ class DownloadTask:
         self.state = "downloading"
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, encoding="utf-8", errors="replace",
-                                     creationflags=NO_WINDOW)
+                                     creationflags=NO_WINDOW | 0x00004000)  # BELOW_NORMAL：下载不抢界面
         if not self.fmt_arg:
             threading.Thread(target=self._preprobe, daemon=True).start()
         threading.Thread(target=self._run, daemon=True).start()
