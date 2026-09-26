@@ -13,4 +13,6 @@ __pycache__/
 *.pyc
 
 # 本地运行日志（不入库）
+# 本地记忆配置（下载目录等，不入库）
+eazyvid_settings.json
 eazyvid.log

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """eazyVid v2 核心逻辑测试（不启动 GUI、不真实下载）"""
-import sys, os, time, threading
+import sys, os, time, threading, tempfile, shutil
 sys.path.insert(0, r'D:\Documents\eazyVid')
 import eazyvid as E
 
@@ -77,7 +77,19 @@ assert cq.q.empty()
 print(f"4. 压缩队列 串行排队 OK（两个任务耗时 {elapsed:.2f}s）")
 
 # 5. build_dl_cmd：临时目录隔离 + 续传 -c
-cmd, tmpdir = E.build_dl_cmd("http://x/v", "18", r"D:\tmp_out", 7, use_cookie=True)
+# 构造临时假 profile（含空 Cookies），验证 cookie 兜底复制分支，不依赖真实登录态
+_fake = tempfile.mkdtemp(prefix="eazyvid_test_profile_")
+try:
+    _net = os.path.join(_fake, "Default", "Network")
+    os.makedirs(_net, exist_ok=True)
+    open(os.path.join(_net, "Cookies"), "wb").close()
+    _orig_pf = E.CHROME_PROFILE
+    E.CHROME_PROFILE = _fake
+    E._COOKIE_CACHE["path"] = None
+    cmd, tmpdir = E.build_dl_cmd("http://x/v", "18", r"D:\tmp_out", 7, use_cookie=True)
+    E.CHROME_PROFILE = _orig_pf
+finally:
+    shutil.rmtree(_fake, ignore_errors=True)
 joined = " ".join(cmd)
 assert ("--cookies-from-browser" in joined and "eazyvid_ck" in joined) or "--cookies" in joined
 assert ".eazyvid_7_" in " ".join(cmd) and ".eazyvid_7_" in tmpdir

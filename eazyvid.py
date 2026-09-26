@@ -31,6 +31,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CHROME_PORT = 9222
 CAPTURE_PORT = 8899  # 书签通道备用端口
 CHROME_PROFILE = os.path.join(SCRIPT_DIR, ".eazyvid_profile")
+SETTINGS_FILE = os.path.join(SCRIPT_DIR, "eazyvid_settings.json")  # 记忆配置（下载目录等，不入库）
 MAX_CONCURRENT = 3          # 并行下载数（吃满带宽）
 SNIFF_TIMEOUT = 60          # 嗅探无动作超时（秒）
 
@@ -1130,6 +1131,27 @@ class App:
         self._start_capture_server()
         root.after(100, self._poll_queue)
 
+    def _load_dl_dir(self):
+        """读取上次选择的下载目录（记忆配置；不存在/失效则回退程序目录）"""
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as _f:
+                _d = json.load(_f).get("download_dir", "")
+            if _d and os.path.isdir(_d):
+                return _d
+        except Exception:
+            pass
+        return SCRIPT_DIR
+
+    def _save_dl_dir(self, *_):
+        """保存当前下载目录到配置（目录变化即写入；仅保存存在的目录）"""
+        try:
+            _d = self.dl_dir_var.get().strip()
+            if _d and os.path.isdir(_d):
+                with open(SETTINGS_FILE, "w", encoding="utf-8") as _f:
+                    json.dump({"download_dir": _d}, _f, ensure_ascii=False)
+        except Exception:
+            pass
+
     def _cleanup_stale_tmpdirs(self):
         """启动时清理历史残留的下载临时目录（仅超过 10 分钟、且非当前进程的）"""
         try:
@@ -1168,7 +1190,8 @@ class App:
         drow = ttk.Frame(self.root)
         drow.pack(fill="x", **pad)
         ttk.Label(drow, text="下载到:").pack(side="left")
-        self.dl_dir_var = tk.StringVar(value=SCRIPT_DIR)
+        self.dl_dir_var = tk.StringVar(value=self._load_dl_dir())
+        self.dl_dir_var.trace_add("write", self._save_dl_dir)
         ttk.Entry(drow, textvariable=self.dl_dir_var, width=64).pack(side="left", fill="x", expand=True, padx=4)
         ttk.Button(drow, text="浏览…", command=self._pick_dir).pack(side="left", padx=2)
 
