@@ -361,11 +361,29 @@ class Sniffer:
             if _ == 0:
                 try:
                     dump_js = r"""(() => {
+  const out = [];
   const items = [...document.querySelectorAll('button,div,span,a')]
     .filter(e => { const t=(e.textContent||'').trim(); return t && t.length<=8 && e.offsetParent!==null; })
     .map(e => (e.textContent||'').trim());
-  const uniq = [...new Set(items)].slice(0, 40);
-  console.log('UI dump: ' + JSON.stringify(uniq));
+  out.push('UI dump: ' + JSON.stringify([...new Set(items)].slice(0, 40)));
+  const iconBtns = [...document.querySelectorAll('button')].filter(e => !(e.textContent||'').trim() && e.offsetParent!==null);
+  out.push('Icon buttons: ' + JSON.stringify(iconBtns.slice(0, 15).map(e => ({
+    aria: e.getAttribute('aria-label')||'', title: e.getAttribute('title')||'',
+    cls: (e.className||'').toString().slice(0, 40), html: (e.innerHTML||'').slice(0, 50)
+  }))));
+  const q = [...document.querySelectorAll('*')].find(e => (e.textContent||'').trim() === '1080 p' && e.children.length === 0);
+  if (q) out.push('QualityEl: ' + JSON.stringify({
+    tag: q.tagName, cls: (q.className||'').toString().slice(0, 60),
+    parent: q.parentElement ? q.parentElement.tagName + '.' + ((q.parentElement.className||'').toString().slice(0, 40)) : '',
+    parentText: q.parentElement ? (q.parentElement.textContent||'').trim().slice(0, 60) : '',
+    html: (q.outerHTML||'').slice(0, 120)
+  }));
+  const v = document.querySelector('video');
+  if (v) out.push('Video: ' + JSON.stringify({
+    rect: Math.round(v.getBoundingClientRect().height) + 'x' + Math.round(v.getBoundingClientRect().width),
+    parent: v.parentElement ? v.parentElement.tagName + '.' + ((v.parentElement.className||'').toString().slice(0, 40)) : ''
+  }));
+  for (const line of out) console.log(line);
   return 'ok';
 })()"""
                     self.ws.send(json.dumps({"id": 65, "method": "Runtime.evaluate",
