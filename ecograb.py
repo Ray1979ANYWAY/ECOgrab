@@ -417,8 +417,7 @@ class Sniffer:
       }
     } catch(e) {}
   }
-  const st = window.__eq_state || 0;
-  if (window.__eq_api === 'jw' && st !== 9) {
+  if (window.__eq_api === 'jw') {
     const idx = window.__eq_api_idx || 0;
     const levels = window.__eq_api_levels || [];
     if (idx < levels.length) {
@@ -428,6 +427,7 @@ class Sniffer:
     } else { window.__eq_state = 9; console.log('EQ api done'); }
     return 'ok';
   }
+  const st = window.__eq_state || 0;
   if (window.__eq_dump === undefined) {
     window.__eq_dump = 1;
     try {
