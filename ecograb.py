@@ -392,41 +392,33 @@ class Sniffer:
   });
   const settingsBtn = [...root.querySelectorAll('button,div,span,a')].find(e => {
     const t = (e.textContent || '').trim();
-    const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.className || ''));
-    if (/menu/i.test(a)) return false;
+    const cls = (e.className || '').toString();
+    const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + cls);
+    if (/menu|topbar|submenu/i.test(a)) return false;
     const okAttr = /(settings|设置|gear)/i.test(a);
+    const okCls = /jw-icon-settings/.test(cls) || /jw-settings$/.test(cls.trim());
     const okText = /^(settings|设置|齿轮)$/i.test(t);
-    return (okAttr || okText) && e.children.length <= 2;
+    return (okAttr || okCls || okText) && e.children.length <= 3;
   });
-  if ((window.__eq_dump === undefined)) {
-    window.__eq_dump = 1;
-    const cands = [...root.querySelectorAll('button,div,span,a')].filter(e => {
-      const a = ((e.getAttribute('aria-label')||'') + ' ' + (e.getAttribute('title')||'') + ' ' + (e.className||''));
-      return /(settings|设置|gear|quality)/i.test(a) || /(settings|设置|gear|quality|画质|清晰)/i.test((e.textContent||'').trim());
-    });
-    console.log('EQ cands: ' + JSON.stringify(cands.slice(0, 12).map(e => ({
-      tag: e.tagName, aria: e.getAttribute('aria-label')||'', title: e.getAttribute('title')||'',
-      cls: (e.className||'').toString().slice(0, 50), txt: (e.textContent||'').trim().slice(0, 30), vis: e.offsetParent!==null
-    }))));
-    const menuEls = [...root.querySelectorAll('.jw-settings-menu, .jw-menu, [class*=settings-menu], [class*=menu]')];
-    console.log('EQ menus: ' + JSON.stringify(menuEls.slice(0, 5).map(e => ({
-      cls: (e.className||'').toString().slice(0, 60), vis: e.offsetParent!==null, txt: (e.textContent||'').trim().slice(0, 80)
-    }))));
-  }
-  if ((window.__eq_st1_dump === undefined) && st === 1) {
-    window.__eq_st1_dump = 1;
-    const visibles = [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
-      const t = (e.textContent||'').trim();
-      return t && t.length <= 12 && e.offsetParent !== null;
-    });
-    console.log('EQ st1 dump: ' + JSON.stringify([...new Set(visibles.map(e => (e.textContent||'').trim()))].slice(0, 30)));
-  }
   const findSub = (scope) => [...scope.querySelectorAll('.jw-menu-item, .jw-settings-content-item, li, div, span, button, a')].find(e => {
     const t = (e.textContent || '').trim();
     const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
     return (/(quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 10 && e.offsetParent !== null) ||
            (/jw-menu-item|jw-settings-content-item/.test(a) && /(quality|画质|清晰)/i.test(a));
   });
+  if ((window.__eq_dump === undefined)) {
+    window.__eq_dump = 1;
+    try {
+      const cands = [...root.querySelectorAll('button,div,span,a')].filter(e => {
+        const a = ((e.getAttribute('aria-label')||'') + ' ' + (e.getAttribute('title')||'') + ' ' + (e.className||''));
+        return /(settings|设置|gear|quality)/i.test(a) || /(settings|设置|gear|quality|画质|清晰)/i.test((e.textContent||'').trim());
+      });
+      console.log('EQ cands: ' + JSON.stringify(cands.slice(0, 14).map(e => ({
+        tag: e.tagName, aria: e.getAttribute('aria-label')||'', title: e.getAttribute('title')||'',
+        cls: (e.className||'').toString().slice(0, 50), txt: (e.textContent||'').trim().slice(0, 30), vis: e.offsetParent!==null
+      }))));
+    } catch(e) { console.log('EQ dump err'); }
+  }
   const st = window.__eq_state || 0;
   if (st === 2) {
     const opts = qOpts();
@@ -441,15 +433,34 @@ class Sniffer:
     if (sub) { sub.click(); console.log('EQ: sub again'); return 'ok'; }
     console.log('EQ: done no opts'); window.__eq_state = 9; return 'done';
   }
+  if (st === 1) {
+    const menuEl = root.querySelector('.jw-settings-menu, [class*=settings-menu]');
+    const open = menuEl && menuEl.offsetParent !== null;
+    if (!open) {
+      if (settingsBtn) { settingsBtn.click(); console.log('EQ: reopen settings'); return 'ok'; }
+      console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
+    }
+    if ((window.__eq_st1_dump === undefined)) {
+      window.__eq_st1_dump = 1;
+      try {
+        const visibles = [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
+          const t = (e.textContent||'').trim();
+          return t && t.length <= 12 && e.offsetParent !== null;
+        });
+        console.log('EQ st1 dump: ' + JSON.stringify([...new Set(visibles.map(e => (e.textContent||'').trim()))].slice(0, 30)));
+      } catch(e) { console.log('EQ st1 dump err'); }
+    }
+    const sub = findSub(root);
+    if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
+    const opts = qOpts();
+    if (opts.length) { window.__eq_state = 2; console.log('EQ: opts visible'); return 'ok'; }
+    console.log('EQ: menu open no opts yet'); return 'ok';
+  }
   const sub = findSub(root);
   if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
   const opts = qOpts();
   if (opts.length) { window.__eq_state = 2; console.log('EQ: opts visible'); return 'ok'; }
-  if (st === 0) {
-    if (settingsBtn) { settingsBtn.click(); window.__eq_state = 1; console.log('EQ: settings btn ' + (settingsBtn.getAttribute('aria-label') || (settingsBtn.textContent||'').trim() || 'gear')); return 'ok'; }
-    console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
-  }
-  if (settingsBtn) { settingsBtn.click(); console.log('EQ: reopen settings'); return 'ok'; }
+  if (settingsBtn) { settingsBtn.click(); window.__eq_state = 1; console.log('EQ: settings btn ' + (settingsBtn.getAttribute('aria-label') || (settingsBtn.textContent||'').trim() || 'gear')); return 'ok'; }
   console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
 })()"""
             try:
