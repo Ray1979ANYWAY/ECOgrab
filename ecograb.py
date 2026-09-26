@@ -423,10 +423,20 @@ class Sniffer:
     const step = window.__eq_api_idx || 0;
     if (step < total) {
       const target = total - 1 - step;
-      window.__eq_api_idx = step + 1;
-      try { jwplayer().setCurrentQuality(target); console.log('EQ api click: ' + levels[target]); }
-      catch(e) { console.log('EQ api err'); }
-    } else { window.__eq_state = 9; console.log('EQ api done'); }
+      const retry = window.__eq_api_retry || 0;
+      try {
+        jwplayer().setCurrentQuality(target);
+        console.log('EQ api click: ' + levels[target]);
+        window.__eq_api_idx = step + 1;
+        window.__eq_api_retry = 0;
+      } catch(e) {
+        if (retry < 2) { window.__eq_api_retry = retry + 1; console.log('EQ api retry: ' + levels[target]); }
+        else { window.__eq_api_idx = step + 1; window.__eq_api_retry = 0; console.log('EQ api skip: ' + levels[target]); }
+      }
+      return 'ok';
+    }
+    window.__eq_state = 9;
+    console.log('EQ api done');
     return 'ok';
   }
   const st = window.__eq_state || 0;
@@ -584,7 +594,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
 
 # ---------- 下载池 ----------
 def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False, referer=None):
-    tmpdir = os.path.join(out_dir, f".ecograb_{task_id}")
+    tmpdir = os.path.join(out_dir, f".ecograb_{task_id}_{os.getpid()}")
     os.makedirs(tmpdir, exist_ok=True)
     cmd = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "--newline",
            "--progress-delta", "0.5"]
