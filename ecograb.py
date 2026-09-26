@@ -87,14 +87,23 @@ _SNIFFER = None
 _cookie_lock = threading.Lock()
 
 
+_COOKIE_CACHE = {"path": None, "ts": 0.0}
+
 def cookie_args():
     """优先 CDP 取 cookie（嗅探 Chrome 运行时，Network.getAllCookies 无文件锁问题，
-    且拿到的是嗅探窗口的登录态）；兜底复制 .chrome_profile 副本。"""
+    且拿到的是嗅探窗口的登录态）；兜底复制 .chrome_profile 副本。
+    CDP 调用同步且可达 1~2 秒，缓存 120 秒：探测/嗅探的后台线程已取过，
+    下载启动（主线程）直接命中缓存，避免界面卡顿。"""
+    now = time.time()
+    if _COOKIE_CACHE["path"] and now - _COOKIE_CACHE["ts"] < 120:
+        return ["--cookies", _COOKIE_CACHE["path"]]
     if _SNIFFER is not None:
         with _cookie_lock:
             try:
                 cf = _SNIFFER.cookie_file()
                 if cf:
+                    _COOKIE_CACHE["path"] = cf
+                    _COOKIE_CACHE["ts"] = now
                     return ["--cookies", cf]
             except Exception:
                 pass
