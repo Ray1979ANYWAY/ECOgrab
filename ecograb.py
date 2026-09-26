@@ -17,6 +17,7 @@ import queue
 import threading
 import time
 import shutil
+import tempfile
 import urllib.request
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -83,11 +84,25 @@ ITAG_LABELS = {
 
 
 def cookie_args():
-    """YouTube 风控绕过：使用嗅探浏览器(.chrome_profile)的登录态 cookie；不存在则不带"""
-    profile = os.path.join(SCRIPT_DIR, ".chrome_profile")
-    if os.path.isdir(profile):
-        return ["--cookies-from-browser", f"chrome:{profile}"]
-    return []
+    """YouTube 风控绕过：复制 .chrome_profile 的 cookie 库到临时副本再读。
+    直接读运行中的 Chrome profile 会被锁库（yt-dlp #7271）导致下载立即失败；
+    复制副本则无论嗅探窗口是否打开都能正常读取。"""
+    src_cookies = os.path.join(CHROME_PROFILE, "Default", "Network", "Cookies")
+    if not os.path.exists(src_cookies):
+        return []
+    try:
+        tmp = os.path.join(tempfile.gettempdir(), "ecograb_ck")
+        os.makedirs(os.path.join(tmp, "Default", "Network"), exist_ok=True)
+        ls = os.path.join(CHROME_PROFILE, "Local State")
+        if os.path.exists(ls):
+            shutil.copy2(ls, os.path.join(tmp, "Local State"))
+        shutil.copy2(src_cookies, os.path.join(tmp, "Default", "Network", "Cookies"))
+        j = src_cookies + "-journal"
+        if os.path.exists(j):
+            shutil.copy2(j, os.path.join(tmp, "Default", "Network", "Cookies-journal"))
+        return ["--cookies-from-browser", f"chrome:{tmp}"]
+    except Exception:
+        return []
 
 # ---------- 探测模块：yt-dlp -J ----------
 def probe_url(url, timeout=90):

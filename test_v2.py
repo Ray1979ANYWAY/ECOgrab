@@ -78,7 +78,7 @@ print(f"4. 压缩队列 串行排队 OK（两个任务耗时 {elapsed:.2f}s）")
 
 # 5. build_dl_cmd：临时目录隔离 + 续传 -c
 cmd, tmpdir = E.build_dl_cmd("http://x/v", "18", r"D:\tmp_out", 7, use_cookie=True)
-assert "--cookies-from-browser" in cmd and any(".chrome_profile" in c for c in cmd)
+assert "--cookies-from-browser" in cmd and "ecograb_ck" in " ".join(cmd)
 assert ".ecograb_7" in " ".join(cmd) and tmpdir.endswith(".ecograb_7")
 assert cmd[-1] == "http://x/v" and "-c" in cmd
 os.rmdir(tmpdir)
