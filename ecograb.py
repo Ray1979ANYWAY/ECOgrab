@@ -1326,6 +1326,13 @@ class App:
         win.title("需要你播放一次")
         win.geometry("480x210")
         win.transient(self.root)
+        # 位于主窗口正中间
+        try:
+            x = self.root.winfo_rootx() + (self.root.winfo_width() - 480) // 2
+            y = self.root.winfo_rooty() + (self.root.winfo_height() - 210) // 2
+            win.geometry(f"480x210+{max(0, x)}+{max(0, y)}")
+        except Exception:
+            pass
         tk.Label(win, text="视频文件藏得比较深，需要你在我们的窗口\n再点击一次播放。",
                  font=("Microsoft YaHei", 13), pady=12).pack()
         tk.Label(win, text="需要登录的网站请先在播放窗口登录一次（登录状态会保留，以后免登录）。",
