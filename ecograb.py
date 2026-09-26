@@ -131,6 +131,17 @@ def extract_formats(info):
     out.sort(key=lambda x: x["vcodec"] == "none")
     return out
 
+def format_size(b):
+    if not b:
+        return "未知大小"
+    b = float(b)
+    u = "B"
+    for u in ("B", "KB", "MB", "GB", "TB"):
+        if b < 1024 or u == "TB":
+            break
+        b /= 1024
+    return f"{b:.1f}{u}" if u != "B" else f"{int(b)}B"
+
 def fmt_arg_for(fmt):
     vid = fmt.get("vcodec") or "none"
     aud = fmt.get("acodec") or "none"
@@ -196,6 +207,7 @@ class Sniffer:
         self.start_url = "about:blank"
         self._captured = False
         self._timeout_fired = False
+        self._auto_clicked = False
 
     def start(self, url=""):
         browser = find_browser()
@@ -279,6 +291,9 @@ class Sniffer:
                     self.log_cb("嗅探：捕获 " + url)
                     if self.event_cb:
                         self.event_cb("captured", url)
+                    if not self._auto_clicked:
+                        self._auto_clicked = True
+                        threading.Thread(target=self._auto_quality, daemon=True).start()
         except Exception as e:
             self.log_cb(f"嗅探：连接中断 {e}")
         finally:
@@ -287,6 +302,30 @@ class Sniffer:
                     self.ws.close()
                 except Exception:
                     pass
+
+    def _auto_quality(self):
+        """尽力而为：在播放器里找清晰度按钮并点击高清晰度，触发网站加载更高码率流"""
+        time.sleep(1.5)
+        if not self.running or not self.ws:
+            return
+        try:
+            js = r"""(() => {
+  const isQ = /^(自动|流畅|标清|高清|超清|蓝光|720p|720P|1080p|1080P|2k|2K|4k|4K)$/;
+  const els = [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
+    const t = (e.textContent || '').trim();
+    return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
+  });
+  if (!els.length) return 'no quality menu found';
+  const order = ['4k','4K','2k','2K','1080p','1080P','蓝光','超清','高清','720p','720P'];
+  const target = els.find(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); }) || els[els.length-1];
+  target.click();
+  return 'clicked: ' + (target.textContent || '').trim();
+})()"""
+            self.ws.send(json.dumps({"id": 60, "method": "Runtime.evaluate",
+                                     "params": {"expression": js, "returnByValue": True}}))
+            self.log_cb("嗅探：已尝试自动切换高清晰度（失败不影响已捕获的流）")
+        except Exception:
+            pass
 
     def stop(self):
         self.running = False
@@ -797,6 +836,7 @@ class App:
         self.current_info = None
         self.formats = []
         self.captured = []
+        self.cap_meta = {}
         self.hls_formats = []
         self.hls_urls = []
         self._hover_row = None
@@ -921,6 +961,18 @@ class App:
                     except Exception:
                         pass
                     self.log(f"HLS 清晰度解析失败：{err[-200:]}")
+                elif kind == "cap_info":
+                    _, url, iid, size, res = item
+                    try:
+                        self.cap_meta[url] = {"size": size, "res": res}
+                        vals = list(self.fmt_tree.item(iid).get("values") or [])
+                        if vals:
+                            if res:
+                                vals[0] = res
+                            vals[3] = format_size(size) if size else "未知大小"
+                            self.fmt_tree.item(iid, values=vals)
+                    except Exception:
+                        pass
                 elif kind == "sniff_timeout":
                     messagebox.showinfo("未捕获到视频",
                         "这一分钟内没有嗅探到视频文件。\n请确认已在播放窗口打开视频页并点击播放，然后重新点「探测格式」。")
@@ -1018,8 +1070,9 @@ class App:
             res_label, codec_label = "视频流(HLS)", "HLS"
             self._hls_seq = getattr(self, "_hls_seq", 0) + 1
             ph = f"hls_ph_{self._hls_seq}"
-            self.fmt_tree.insert("", 0, iid=ph, values=(res_label, "捕获", codec_label, "捕获流", "嗅探"))
+            self.fmt_tree.insert("", 0, iid=ph, values=(res_label, "捕获", codec_label, "解析中…", "嗅探"))
             threading.Thread(target=self._probe_hls, args=(url, ph), daemon=True).start()
+            return
         elif ".mpd" in url:
             res_label, codec_label = "视频流(DASH)", "DASH"
         elif ".mp4" in url:
@@ -1028,13 +1081,36 @@ class App:
             res_label, codec_label = "视频流", "webm"
         else:
             res_label, codec_label = "视频流?", "未知"
-        self.fmt_tree.insert("", 0, values=(
-            res_label, "捕获", codec_label, "捕获流", "嗅探"))
+        iid = self.fmt_tree.insert("", 0, values=(
+            res_label, "捕获", codec_label, "解析中…", "嗅探"))
         self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
+        if ".m3u8" not in url and ".mpd" not in url and "音频" not in res_label:
+            threading.Thread(target=self._probe_capture, args=(url, iid), daemon=True).start()
         if "音频" in res_label:
             self.log(f"嗅探捕获音频流：{url}")
         else:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
+
+    def _probe_capture(self, url, iid):
+        """捕获流后台探测：yt-dlp -J 拿大小和清晰度，更新列表行 + 供下载传 size"""
+        try:
+            args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
+            args += cookie_args()
+            ref = self._sniff_referer()
+            if ref and "googlevideo.com" not in url:
+                args += ["--referer", ref]
+            args.append(url)
+            r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=60, creationflags=NO_WINDOW)
+            if r.returncode != 0:
+                return
+            info = json.loads(r.stdout)
+            size = info.get("filesize") or info.get("filesize_approx")
+            h = info.get("height") or 0
+            w = info.get("width") or 0
+            self.q.put(("cap_info", url, iid, size, (f"{w}x{h}" if h else "")))
+        except Exception:
+            pass
 
     def _probe_hls(self, url, ph):
         try:
@@ -1185,8 +1261,10 @@ class App:
             vals = self.fmt_tree.item(row).get("values") or []
             is_audio = bool(vals and "音频" in str(vals[0]))
             name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
+            meta = self.cap_meta.get(url) or {}
             self.pool.add(url, None, self.dl_dir_var.get(), None,
-                          name, True, referer=self._sniff_referer())
+                          name, True, referer=self._sniff_referer(),
+                          size=meta.get("size"))
             if not is_audio:
                 self.log("提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并")
             return
