@@ -378,25 +378,22 @@ class Sniffer:
                 return
             before = len(self.seen)
             js = r"""(() => {
-  const isQ = /^(自动|流畅|标清|高清|超清|蓝光|\d{2,4}\s?p|2k|4k)$/i;
+  const isQ = /^(自动|流畅|标清|高清|超清|蓝光|\d{2,4}\s?p?|2k|4k)$/i;
   const v = document.querySelector('video');
   let root = v ? (v.closest('.jwplayer') || v.closest('.jw-media') || v.parentElement.parentElement || v.parentElement || document) : document;
   const qOpts = () => [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
     const t = (e.textContent || '').trim();
     return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
   });
-  const settingsBtn = [...root.querySelectorAll('button,div,span,a')].find(e => {
-    const t = (e.textContent || '').trim();
+  const settingsBtn = [...root.querySelectorAll('button')].find(e => {
     const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.className || ''));
-    const okAttr = /(settings|设置|gear|quality|画质|清晰)/i.test(a);
-    const okText = /(settings|设置|gear|quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 8 && e.children.length <= 2;
-    return (okAttr || okText) && e.offsetParent !== null && !/jw-nextup|jw-title/i.test(a);
+    return /(settings|设置|gear)/i.test(a) && e.offsetParent !== null && !/menu/i.test(a);
   });
-  const findSub = (scope) => [...scope.querySelectorAll('.jw-menu-item, li, div, span, button, a')].find(e => {
+  const findSub = (scope) => [...scope.querySelectorAll('.jw-menu-item, .jw-settings-content-item, li, div, span, button, a')].find(e => {
     const t = (e.textContent || '').trim();
     const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
     return (/(quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 10 && e.offsetParent !== null) ||
-           (/jw-menu-item/.test(a) && /(quality|画质|清晰)/i.test(a));
+           (/jw-menu-item|jw-settings-content-item/.test(a) && /(quality|画质|清晰)/i.test(a));
   });
   const st = window.__eq_state || 0;
   if (st === 2) {
@@ -412,18 +409,15 @@ class Sniffer:
     if (sub) { sub.click(); console.log('EQ: sub again'); return 'ok'; }
     console.log('EQ: done no opts'); window.__eq_state = 9; return 'done';
   }
-  if (settingsBtn) {
-    settingsBtn.click();
-    if (st === 0) window.__eq_state = 1;
-    console.log('EQ: settings btn ' + ((settingsBtn.textContent || '').trim() || settingsBtn.getAttribute('aria-label') || ''));
-    return 'ok';
+  const sub = findSub(root);
+  if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
+  const opts = qOpts();
+  if (opts.length) { window.__eq_state = 2; console.log('EQ: opts visible'); return 'ok'; }
+  if (st === 0) {
+    if (settingsBtn) { settingsBtn.click(); window.__eq_state = 1; console.log('EQ: settings btn ' + (settingsBtn.getAttribute('aria-label') || 'gear')); return 'ok'; }
+    console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
   }
-  if (st === 1) {
-    const sub = findSub(root);
-    if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
-  }
-  const opts0 = qOpts();
-  if (opts0.length) { window.__eq_state = 2; console.log('EQ: opts visible'); return 'ok'; }
+  if (settingsBtn) { settingsBtn.click(); console.log('EQ: reopen settings'); return 'ok'; }
   console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
 })()"""
             try:
