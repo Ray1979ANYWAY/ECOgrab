@@ -375,7 +375,7 @@ class Sniffer:
     let chosen = null;
     if (pos >= 0) {
       const candidates = els.filter(e => { const t=(e.textContent||'').trim(); return order.some(o => t.startsWith(o)); });
-      chosen = candidates[Math.min(pos + idx, candidates.length - 1)] || null;
+      chosen = candidates[Math.min(idx, candidates.length - 1)] || null;
     } else {
       chosen = els[els.length - 1 - Math.min(idx, els.length - 1)] || null;
     }
@@ -1186,13 +1186,19 @@ class App:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
 
     def _probe_capture(self, url, iid):
-        """捕获流后台探测（快路径优先）：先 HEAD 拿大小（0.5s 内出结果，分辨率从 URL 猜），
-        -J 在后台补精确分辨率/大小。列表先出大小，几秒后自动补清晰度。"""
+        """捕获流后台探测（并行）：URL 猜分辨率立即显示 → HEAD 拿大小 → -J 后台补精确。
+        三路并行，列表先出 ~清晰度，随后补大小，最后补精确宽高；每行都有信息。"""
         m = re.search(r"(?:^|[/_.-])(\d{3,4})p(?=[/_.-]|$)", url, re.I)
         h = int(m.group(1)) if m else 0
+        if h:
+            self.q.put(("cap_info", url, iid, None, f"~{h}p"))
+        threading.Thread(target=self._probe_j, args=(url, iid, h), daemon=True).start()
         size = self._head_size(url)
-        if size or h:
-            self.q.put(("cap_info", url, iid, size, (f"~{h}p" if h else "")))
+        if size:
+            self.q.put(("cap_info", url, iid, size, f"~{h}p" if h else ""))
+
+    def _probe_j(self, url, iid, h):
+        """yt-dlp -J 后台补精确分辨率/大小（不覆盖 HEAD 已拿到的大小）"""
         try:
             args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
             args += cookie_args()
@@ -1208,7 +1214,8 @@ class App:
                 h2 = info.get("height") or 0
                 w2 = info.get("width") or 0
                 if size2 or h2:
-                    self.q.put(("cap_info", url, iid, size2 or size,
+                    old = self.cap_meta.get(url) or {}
+                    self.q.put(("cap_info", url, iid, size2 or old.get("size"),
                                 (f"{w2}x{h2}" if h2 else (f"~{h}p" if h else ""))))
         except Exception:
             pass
