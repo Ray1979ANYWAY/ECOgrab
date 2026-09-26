@@ -641,6 +641,27 @@ def build_dl_cmd(url, fmt_arg, out_dir, task_id, use_cookie=False, referer=None)
     cmd.append(url)
     return cmd, tmpdir
 
+def _kill_proc_tree(proc):
+    """Windows 杀整个进程树：yt-dlp.exe 是 pyinstaller onefile 双进程架构
+    （bootloader 父进程 + 实际下载子进程），terminate 只杀父进程会让子进程
+    变孤儿继续下载。taskkill /T /F 才能连子进程一起杀掉。"""
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                           capture_output=True, timeout=5, creationflags=NO_WINDOW)
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=3)
+    except Exception:
+        pass
+
 class DownloadTask:
     """单个下载任务；state: waiting/downloading/paused/done/failed"""
     def __init__(self, url, fmt_arg, out_dir, mode, title, pool, task_id, use_cookie=False, referer=None, size=None):
@@ -821,10 +842,7 @@ class DownloadTask:
     def pause(self):
         if self.state == "downloading" and self.proc:
             self.state = "paused"
-            try:
-                self.proc.terminate()
-            except Exception:
-                pass
+            _kill_proc_tree(self.proc)
             self.pool.on_task_paused(self)
 
     def resume(self):
@@ -877,11 +895,7 @@ class DownloadPool:
     def remove(self, task):
         if task in self.tasks:
             self.tasks.remove(task)
-        if task.proc and task.proc.poll() is None:
-            try:
-                task.proc.terminate()
-            except Exception:
-                pass
+        _kill_proc_tree(task.proc)
         if task.state != "done":
             if task.tmpdir and os.path.isdir(task.tmpdir):
                 shutil.rmtree(task.tmpdir, ignore_errors=True)
