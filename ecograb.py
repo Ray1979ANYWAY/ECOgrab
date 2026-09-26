@@ -569,6 +569,26 @@ class Sniffer:
         except Exception:
             return None
 
+    def page_tip(self, msg):
+        """在播放页注入浮动提示条（CDP Runtime.evaluate），6 秒后自动消失。"""
+        if not self.ws or not self.running:
+            return False
+        try:
+            js = ("(function(){"
+                  "var t=document.createElement('div');"
+                  "t.style.cssText='position:fixed;top:18px;right:18px;z-index:2147483647;"
+                  "background:rgba(0,0,0,0.85);color:#4cff88;padding:12px 18px;border-radius:10px;"
+                  "font:bold 14px/1.4 sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5);"
+                  "pointer-events:none;';"
+                  "t.textContent=" + json.dumps(msg, ensure_ascii=False) + ";"
+                  "document.documentElement.appendChild(t);"
+                  "setTimeout(function(){t.remove();},6000);})()")
+            self.ws.send(json.dumps({"id": 601, "method": "Runtime.evaluate",
+                                     "params": {"expression": js}}))
+            return True
+        except Exception:
+            return False
+
     def stop(self):
         self.running = False
         if self.ws:
@@ -909,7 +929,7 @@ def compress_video(in_path, mode_name, log_cb):
     log_cb(f"压缩：{os.path.basename(in_path)} → {os.path.basename(out_path)}（{mode_name}）")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace",
-                            creationflags=NO_WINDOW)
+                            creationflags=NO_WINDOW | 0x00004000)  # BELOW_NORMAL：压缩不抢界面
     t0 = time.time()
     for raw in proc.stdout:
         line = raw.strip()
@@ -1397,7 +1417,9 @@ class App:
             res_label, codec_label = "视频流?", "未知"
         iid = self.fmt_tree.insert("", 0, values=(
             res_label, "捕获", codec_label, "解析中…", "嗅探"))
-        self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
+        sn = getattr(self, "sniffer", None) or _SNIFFER
+        if not (sn and sn.page_tip("已捕获视频流，请回主窗口下载")):
+            self._show_tooltip("已捕获视频文件，请回到主窗口点「下载」")
         if ".m3u8" not in url and ".mpd" not in url and "音频" not in res_label:
             threading.Thread(target=self._probe_capture, args=(url, iid), daemon=True).start()
         if "音频" in res_label:
