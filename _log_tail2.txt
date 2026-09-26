@@ -1,0 +1,131 @@
+TOTAL 1040
+[13:40:33] 提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并
+[13:43:38] 下载失败（退出码 1）：https://cdn.pvvstream.pro/videos/-155978534/456240103/vid_720p.mp4?rs=720000&rb=5592405&secure=Mz1Jt1eFSYSh6mURSYIghg%3D%3D%2C1790406390
+[13:43:39] 已删除任务：vid_720p.mp4
+
+===== 启动 2026-09-26 13:46:31 =====
+[13:46:31] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[13:46:31] 本地接收服务已启动（端口 8899）
+[13:46:31] 探测失败：测试错误
+
+===== 启动 2026-09-26 13:50:24 =====
+[13:50:24] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[13:50:24] 本地接收服务已启动（端口 8899）
+[13:50:29] 正在探测：https://mat6tube.com/watch/-155978534_456240103
+[13:50:35] 探测失败：WARNING: [generic] Falling back on generic information extractor
+ERROR: [generic] -155978534_456240103: Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)
+[13:50:36] 嗅探：打开播放窗口 https://mat6tube.com/watch/-155978534_456240103
+[13:50:37] 嗅探：已连接，请在播放窗口打开/刷新视频页并点击播放
+[13:50:39] 嗅探JS: Main API failed or network error, switching to fallback: Failed to fetch
+[13:50:39] 嗅探：捕获 https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_480p.mp4?secure=1790401838-NPJlpQPeauO0iwg5nsP7ZX46j%2FLyIyEQvHzRofuBFM8%3D
+[13:50:39] 嗅探JS: Error fetching or processing videos: 
+[13:50:40] 嗅探捕获视频流 视频流：https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_480p.mp4?secure=1790401838-NPJlpQPeauO0iwg5nsP7ZX46j%2FLyIyEQvHzRofuBFM8%3D
+[13:50:41] 嗅探：自动遍历清晰度档位（通用播放器识别，最多约 40 秒）
+[13:50:41] 嗅探JS: EQ api: jw ["720","480","360","240"]
+[13:50:41] 嗅探JS: EQ api retry: 240
+[13:50:44] 嗅探JS: EQ api click: 240
+[13:50:45] 嗅探：检测到页面跳转/推荐视频流（与当前视频不同），已忽略：https://iwad.cachefly.net/bm/a0/8c/2020-960-a08c7479c9e15c576e73ee0ba77a9c7a.mp4
+[13:50:47] 嗅探JS: EQ api click: 360
+[13:50:47] 嗅探：捕获 https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_360p.mp4?secure=1790401838-9BU6s2DltCx%2BisOi23i%2FNKPkDWLaHblh7Pdckfkae2E%3D
+[13:50:47] 嗅探捕获视频流 视频流：https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_360p.mp4?secure=1790401838-9BU6s2DltCx%2BisOi23i%2FNKPkDWLaHblh7Pdckfkae2E%3D
+[13:50:50] 嗅探：第 3 轮有新流，已捕获 2 个流
+[13:50:50] 嗅探JS: EQ api click: 480
+[13:50:50] 探测 =1790401838-NPJlpQPeauO0iwg5nsP7ZX46j%2FLyIyEQvHzRofuBFM8%3D：HEAD 大小 326.0MB
+[13:50:53] 嗅探JS: EQ api click: 720
+[13:50:53] 嗅探：捕获 https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_720p.mp4?secure=1790401838-dM%2FzK53YA9h9NVGULoAFMYZjEipZpU5JkZG0vpUQpK0%3D
+[13:50:53] 嗅探捕获视频流 视频流：https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_720p.mp4?secure=1790401838-dM%2FzK53YA9h9NVGULoAFMYZjEipZpU5JkZG0vpUQpK0%3D
+[13:50:56] 嗅探：第 5 轮有新流，已捕获 3 个流
+[13:50:56] 嗅探JS: EQ api done
+[13:50:59] 嗅探JS: EQ api done
+[13:51:01] 探测 790401838-9BU6s2DltCx%2BisOi23i%2FNKPkDWLaHblh7Pdckfkae2E%3D：HEAD 大小 197.2MB
+[13:51:02] 嗅探JS: EQ api done
+[13:51:05] 嗅探：清晰度遍历结束（可手动切换清晰度继续捕获）
+[13:51:06] 探测 =1790401838-dM%2FzK53YA9h9NVGULoAFMYZjEipZpU5JkZG0vpUQpK0%3D：HEAD 大小 618.9MB
+[13:51:21] 提示：该流是纯视频流（YouTube 分片视频通常无声音），如需声音请再下载对应音频流后合并
+[13:53:28] 下载失败（退出码 1）：https://cdn2.pvvstream.pro/videos/-155978534/456240103/vid_720p.mp4?secure=1790401838-dM%2FzK53YA9h9NVGULoAFMYZjEipZpU5JkZG0vpUQpK0%3D
+[13:53:28] 已删除任务：vid_720p.mp4
+
+===== 启动 2026-09-26 14:07:43 =====
+[14:07:43] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:07:43] 本地接收服务已启动（端口 8899）
+[14:07:43] 探测失败：测试错误
+
+===== 启动 2026-09-26 14:18:20 =====
+[14:18:20] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:18:20] 本地接收服务已启动（端口 8899）
+
+===== 启动 2026-09-26 14:18:48 =====
+[14:18:48] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:18:48] 本地接收服务已启动（端口 8899）
+
+===== 启动 2026-09-26 14:19:20 =====
+[14:19:20] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:19:20] 本地接收服务已启动（端口 8899）
+[14:19:56] 正在探测：https://www.pornhub.com/view_video.php?viewkey=ph61f256a2580ba
+[14:20:04] 探测成功：4 个格式
+[14:20:44] 加入下载池：1920x1080（格式 hls-2043）
+
+===== 启动 2026-09-26 14:20:53 =====
+[14:20:54] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:20:54] 本地接收服务已启动（端口 8899）
+[14:20:54] 探测失败：测试错误
+[14:22:51] 下载失败（退出码 1）：https://www.pornhub.com/view_video.php?viewkey=ph61f256a2580ba
+[14:22:51] 已删除任务：A Fucking Conversation with Kristen Scott.mp4
+
+===== 启动 2026-09-26 14:23:06 =====
+[14:23:07] 就绪：粘贴视频地址 → 解析；失败会引导你播放视频页。
+[14:23:07] 本地接收服务已启动（端口 8899）
+[14:23:07] 探测失败：测试错误
+[14:25:25] 正在探测：https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:25:34] 探测失败：未找到格式
+[14:25:36] 嗅探：打开播放窗口 https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:25:37] 嗅探：已连接，请在播放窗口打开/刷新视频页并点击播放
+[14:25:42] 嗅探JS: invalid selector: cdbecgfdcb
+[14:25:43] 嗅探JS: Failed ad 2. Zone zone_2412681 does not exist.
+[14:25:46] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/master.m3u8?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:46] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/index-v1-a1.m3u8?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:47] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-1-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:47] 嗅探捕获视频流 视频流：https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-1-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:47] 嗅探：自动遍历清晰度档位（通用播放器识别，最多约 40 秒）
+[14:25:47] 嗅探JS: EQ gears: []
+[14:25:47] 嗅探JS: EQ: done no settings
+[14:25:49] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-2-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:49] 嗅探捕获视频流 视频流：https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-2-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:49] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-3-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:50] 嗅探捕获视频流 视频流：https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-3-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:50] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-4-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:50] 嗅探捕获视频流 视频流：https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-4-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:50] 嗅探：第 1 轮有新流，已捕获 6 个流
+[14:25:50] 嗅探JS: EQ: done no settings
+[14:25:51] 嗅探：捕获 https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-5-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:51] 嗅探捕获视频流 视频流：https://ev-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/seg-5-v1-a1.ts?validfrom=1790400339&validto=1790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D
+[14:25:54] 嗅探：第 2 轮有新流，已捕获 7 个流
+[14:25:55] HLS 嗅探展开 1 个清晰度，可直接点选
+[14:25:55] HLS 流未解析出清晰度，将按默认最高清晰度下载
+[14:25:58] 探测 790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D：HEAD 大小 843.4KB
+[14:25:59] 探测 790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D：HEAD 大小 1.0MB
+[14:26:00] 探测 790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D：HEAD 大小 969.7KB
+[14:26:01] 探测 790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D：HEAD 大小 908.1KB
+[14:26:01] 探测 790407539&ipa=1&hdl=-1&hash=xcojzvmLHqcI3OXxun3%2FvQ4pP9U%3D：HEAD 大小 1.5MB
+[14:26:55] 加入下载池：1280x720（HLS 格式 1726）
+[14:28:45] 正在探测：https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:28:58] 探测失败：未找到格式
+[14:29:01] 嗅探：打开播放窗口 https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:29:05] 嗅探：已连接，请在播放窗口打开/刷新视频页并点击播放
+[14:29:12] 嗅探：捕获 https://hv-h.phncdn.com/hls/videos/202307/03/434766681/720P_4000K_434766681.mp4/master.m3u8?h=ChIiZZvVW6nXyn0gtLk3nITlwCo%3D&e=1790407744&f=1
+[14:29:14] 嗅探：自动遍历清晰度档位（通用播放器识别，最多约 40 秒）
+[14:29:14] 下载完成：master.mp4（未压缩，可到压缩页手动转）
+[14:29:18] 嗅探JS: Failed ad 0. Zone zone_2190761 does not exist.
+[14:29:19] 嗅探JS: Failed ad 1. Zone zone_2190771 does not exist.
+[14:29:19] 嗅探JS: Failed ad 2. Zone zone_2412681 does not exist.
+[14:29:19] 嗅探JS: Failed ad 3. Zone zone_5 does not exist.
+[14:29:25] HLS 清晰度解析失败：ERROR: [generic] master: Unable to download webpage: HTTP Error 410: Gone (caused by <HTTPError 410: Gone>)
+
+[14:29:34] 嗅探JS: Failed ad 2. Zone zone_2412681 does not exist.
+[14:29:38] 嗅探：清晰度遍历结束（可手动切换清晰度继续捕获）
+[14:29:56] 正在探测：https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:30:10] 探测成功：4 个格式
+[14:31:53] 加入下载池：1920x1080（格式 hls-2823）
+[14:32:02] 下载错误：ERROR: [PornHub] 64a2ee35a3379: Requested format is not available. Use --list-formats for a list of available formats
+[14:32:03] 下载失败（退出码 1）：https://www.pornhub.com/view_video.php?viewkey=64a2ee35a3379
+[14:32:51] 已删除任务：master.mp4

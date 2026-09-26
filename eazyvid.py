@@ -144,6 +144,56 @@ def probe_url(url, timeout=90):
     except Exception as e:
         return None, f"解析失败: {e}"
 
+def probe_formats_f(url, timeout=90):
+    """-J 探测失败的 -F 兜底：解析 yt-dlp 格式表（与命令行脚本一致）。
+    返回 (formats, error)；formats 结构与 extract_formats 兼容。"""
+    try:
+        r = subprocess.run(
+            [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist"] + cookie_args() + ["-F", url],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+            creationflags=NO_WINDOW | 0x00004000)
+    except subprocess.TimeoutExpired:
+        return None, "探测超时（90秒），可能是网络慢或需要代理"
+    if r.returncode != 0:
+        return None, (r.stderr or r.stdout or "").strip()[-800:]
+    fmts = []
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith("-") or line.startswith("ID"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        fid = parts[0]
+        if fid in ("ID", "---") or not re.match(r'^[a-zA-Z0-9+_.-]+$', fid):
+            continue
+        ext = parts[1]
+        res = ""
+        for pp in parts:
+            if re.match(r'^\d+x\d+$', pp) or re.match(r'^\d+(p|k)$', pp):
+                res = pp
+                break
+        lower = line.lower()
+        if "av1" in lower or "vp9" in lower or "vp08" in lower or "vp09" in lower:
+            vcodec = "vp9"
+        elif "avc1" in lower or "h264" in lower:
+            vcodec = "avc1"
+        else:
+            vcodec = "unknown"
+        acodec = "none" if ("video only" in lower or "videoonly" in lower) else ("mp4a" if ("audio only" in lower or "m4a" in lower) else "")
+        size = None
+        msz = re.search(r'([\d.]+)\s*(MiB|GiB|KiB|MB|GB|KB)', line)
+        if msz:
+            v = float(msz.group(1))
+            unit = msz.group(2)
+            size = int(v * 1024**2) if unit in ("MiB", "MB") else int(v * 1024**3) if unit in ("GiB", "GB") else int(v * 1024)
+        fmts.append({"id": fid, "ext": ext, "res": str(res), "vcodec": vcodec,
+                     "acodec": acodec, "size": size, "note": ""})
+    if not fmts:
+        return None, "未解析到格式（-F 输出为空）"
+    fmts.sort(key=lambda x: x["vcodec"] == "none")
+    return fmts, None
+
 def extract_formats(info):
     out = []
     for f in info.get("formats", []):
@@ -1374,7 +1424,13 @@ class App:
             if fmts:
                 self.q.put(("formats", fmts))
                 return
-        self.q.put(("probe_fail", (url, err or "未找到格式")))
+        # -J 失败/无格式 → 回退 -F 格式表（与命令行脚本一致；很多站 -F 可直接探测）
+        fmts2, err2 = probe_formats_f(url)
+        if fmts2:
+            self.log("探测 -J 失败，已回退 -F 格式表成功")
+            self.q.put(("formats", fmts2))
+            return
+        self.q.put(("probe_fail", (url, err2 or err or "未找到格式")))
 
     def _probe_failed(self, payload):
         url, err = payload
