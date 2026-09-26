@@ -1173,7 +1173,7 @@ class App:
                     url = self.hls_urls[int(bi)]
                 except Exception:
                     return
-                fsz = fmt.get("filesize") or fmt.get("filesize_approx")
+                fsz = fmt.get("size") or fmt.get("filesize") or fmt.get("filesize_approx")
                 self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                               f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
                               referer=self._sniff_referer(), size=fsz)
@@ -1197,7 +1197,7 @@ class App:
         info = getattr(self, "current_info", None) or {}
         t = (info.get("title") or "").strip() or f"{fmt['res'] or fmt['id']} · {fmt['id']}"
         ext = fmt.get("ext") or "mp4"
-        fsz = fmt.get("filesize") or fmt.get("filesize_approx")
+        fsz = fmt.get("size") or fmt.get("filesize") or fmt.get("filesize_approx")
         self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                       f"{t}.{ext}", True,
                       referer=url if not url.startswith("about:") else None,
