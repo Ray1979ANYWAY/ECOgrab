@@ -1152,9 +1152,13 @@ class App:
             self.log(f"嗅探捕获视频流 {res_label}：{url}")
 
     def _probe_capture(self, url, iid):
-        """捕获流后台探测：yt-dlp -J 拿大小/清晰度；-J 拿不到大小就 HEAD/Range 兜底；分辨率从 URL 猜"""
-        size = None
-        h = w = 0
+        """捕获流后台探测（快路径优先）：先 HEAD 拿大小（0.5s 内出结果，分辨率从 URL 猜），
+        -J 在后台补精确分辨率/大小。列表先出大小，几秒后自动补清晰度。"""
+        m = re.search(r"(?:^|[/_.-])(\d{3,4})p(?=[/_.-]|$)", url, re.I)
+        h = int(m.group(1)) if m else 0
+        size = self._head_size(url)
+        if size or h:
+            self.q.put(("cap_info", url, iid, size, (f"~{h}p" if h else "")))
         try:
             args = [YTDLP, "--ffmpeg-location", FFMPEG, "--no-playlist", "-J", "--no-warnings"]
             args += cookie_args()
@@ -1165,21 +1169,15 @@ class App:
             r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
                                errors="replace", timeout=60, creationflags=NO_WINDOW)
             if r.returncode == 0:
-                try:
-                    info = json.loads(r.stdout)
-                    size = info.get("filesize") or info.get("filesize_approx")
-                    h = info.get("height") or 0
-                    w = info.get("width") or 0
-                except Exception:
-                    pass
+                info = json.loads(r.stdout)
+                size2 = info.get("filesize") or info.get("filesize_approx")
+                h2 = info.get("height") or 0
+                w2 = info.get("width") or 0
+                if size2 or h2:
+                    self.q.put(("cap_info", url, iid, size2 or size,
+                                (f"{w2}x{h2}" if h2 else (f"~{h}p" if h else ""))))
         except Exception:
             pass
-        if not size:
-            size = self._head_size(url)
-        if not h:
-            m = re.search(r"(?:^|[/_.-])(\d{3,4})p(?=[/_.-]|$)", url, re.I)
-            h = int(m.group(1)) if m else 0
-        self.q.put(("cap_info", url, iid, size, (f"{w}x{h}" if h else "")))
 
     def _head_size(self, url):
         """HEAD 拿 Content-Length；被拦则 GET Range: bytes=0-0 从 Content-Range 取总大小"""
