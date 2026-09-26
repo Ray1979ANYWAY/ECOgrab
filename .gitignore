@@ -16,3 +16,5 @@ __pycache__/
 # 本地记忆配置（下载目录等，不入库）
 eazyvid_settings.json
 eazyvid.log
+
+hls_test/
