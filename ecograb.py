@@ -379,10 +379,24 @@ class Sniffer:
             before = len(self.seen)
             js = r"""(() => {
   const isQ = /^(自动|流畅|标清|高清|超清|蓝光|\d{2,4}\s?p|2k|4k)$/i;
-  const isMenu = /(清晰度|画质|quality|质量|设置|settings|gear|畫質)/i;
-  const qOpts = () => [...document.querySelectorAll('li,div,span,button,a')].filter(e => {
+  const v = document.querySelector('video');
+  const root = v ? (v.closest('.jw-media') || v.parentElement || document) : document;
+  const qOpts = () => [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
     const t = (e.textContent || '').trim();
     return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
+  });
+  const settingsBtn = [...root.querySelectorAll('button,div,span,a')].find(e => {
+    const t = (e.textContent || '').trim();
+    const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.className || ''));
+    const okAttr = /(settings|设置|gear|quality|画质|清晰)/i.test(a);
+    const okText = /(settings|设置|gear|quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 8 && e.children.length <= 2;
+    return (okAttr || okText) && e.offsetParent !== null && !/jw-nextup|jw-title/i.test(a);
+  });
+  const findSub = (scope) => [...scope.querySelectorAll('.jw-menu-item, li, div, span, button, a')].find(e => {
+    const t = (e.textContent || '').trim();
+    const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
+    return (/(quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 10 && e.offsetParent !== null) ||
+           (/jw-menu-item/.test(a) && /(quality|画质|清晰)/i.test(a));
   });
   const st = window.__eq_state || 0;
   if (st === 2) {
@@ -394,36 +408,23 @@ class Sniffer:
       if (chosen) { chosen.click(); console.log('EQ: click opt ' + (chosen.textContent || '').trim()); }
       return 'ok';
     }
+    const sub = findSub(root);
+    if (sub) { sub.click(); console.log('EQ: sub again'); return 'ok'; }
     console.log('EQ: done no opts'); window.__eq_state = 9; return 'done';
   }
-  const opts0 = qOpts();
-  if (opts0.length) { window.__eq_state = 2; console.log('EQ: opts visible directly'); return 'ok'; }
-  const v = document.querySelector('video');
-  const root = v ? (v.closest('.jw-media') || v.parentElement || document) : document;
-  const btn = [...root.querySelectorAll('button,div,span,a')].find(e => {
-    const t = (e.textContent || '').trim();
-    const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.className || ''));
-    const okText = isMenu.test(t) && t.length <= 8 && e.children.length <= 2 && e.offsetParent !== null;
-    const okAttr = /(settings|设置|quality|画质|清晰|gear|hd)/i.test(a) && e.offsetParent !== null;
-    return (okText || okAttr) && !/jw-nextup|jw-title/i.test(a);
-  });
-  if (btn) {
-    btn.click();
+  if (settingsBtn) {
+    settingsBtn.click();
     if (st === 0) window.__eq_state = 1;
-    console.log('EQ: menu btn ' + ((btn.textContent || '').trim() || btn.getAttribute('aria-label') || ''));
+    console.log('EQ: settings btn ' + ((settingsBtn.textContent || '').trim() || settingsBtn.getAttribute('aria-label') || ''));
     return 'ok';
   }
   if (st === 1) {
-    const sub = [...document.querySelectorAll('.jw-menu-item, li, div, span, button, a')].find(e => {
-      const t = (e.textContent || '').trim();
-      const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
-      return (/(quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 10 && e.offsetParent !== null) ||
-             (/jw-menu-item/.test(a) && /(quality|画质|清晰)/i.test(a));
-    });
-    if (sub) { sub.click(); console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
-    console.log('EQ: done no sub'); window.__eq_state = 9; return 'done';
+    const sub = findSub(root);
+    if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
   }
-  console.log('EQ: done no menu btn'); window.__eq_state = 9; return 'done';
+  const opts0 = qOpts();
+  if (opts0.length) { window.__eq_state = 2; console.log('EQ: opts visible'); return 'ok'; }
+  console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
 })()"""
             try:
                 self.ws.send(json.dumps({"id": 70 + _, "method": "Runtime.evaluate",
