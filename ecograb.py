@@ -380,7 +380,7 @@ class Sniffer:
             js = r"""(() => {
   const isQ = /^(自动|流畅|标清|高清|超清|蓝光|\d{2,4}\s?p|2k|4k)$/i;
   const v = document.querySelector('video');
-  const root = v ? (v.closest('.jw-media') || v.parentElement || document) : document;
+  let root = v ? (v.closest('.jwplayer') || v.closest('.jw-media') || v.parentElement.parentElement || v.parentElement || document) : document;
   const qOpts = () => [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
     const t = (e.textContent || '').trim();
     return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
