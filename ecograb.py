@@ -393,24 +393,26 @@ class Sniffer:
   const settingsBtn = [...root.querySelectorAll('button,div,span,a')].find(e => {
     const t = (e.textContent || '').trim();
     const cls = (e.className || '').toString();
-    const a = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '') + ' ' + cls);
-    if (/menu|topbar|submenu/i.test(a)) return false;
-    const okAttr = /(settings|设置|gear)/i.test(a);
-    const okCls = /jw-icon-settings/.test(cls) || /jw-settings$/.test(cls.trim());
+    const ariaTitle = ((e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || '')).trim();
+    if (/menu|topbar|submenu|close/i.test(ariaTitle + ' ' + cls)) return false;
+    const okCls = /jw-icon-settings/.test(cls);
+    const okAttr = /(^|\s)(settings|设置|齿轮)(\s|$)/i.test(ariaTitle);
     const okText = /^(settings|设置|齿轮)$/i.test(t);
-    return (okAttr || okCls || okText) && e.children.length <= 3;
+    return (okCls || okAttr || okText) && e.children.length <= 3;
   });
   const findSub = (scope) => {
     const topBar = [...scope.querySelectorAll('.jw-settings-topbar [class*=jw-icon], .jw-settings-topbar-buttons [class*=jw-icon], .jw-settings-topbar [class*=settings]')].find(e => {
       const t = (e.textContent || '').trim();
-      return (/(quality|画质|清晰度|解析度)/i.test(t) && t.length <= 12 && e.offsetParent !== null);
+      const aria = (e.getAttribute('aria-label') || '').trim();
+      return ((/(quality|画质|清晰度|解析度)/i.test(t) && t.length <= 12) || /^(quality|画质|清晰度|解析度)$/i.test(aria)) && e.offsetParent !== null;
     });
     if (topBar) return topBar;
     return [...scope.querySelectorAll('.jw-menu-item, .jw-settings-content-item, li, div, span, button, a')].find(e => {
       const t = (e.textContent || '').trim();
       const a = (e.getAttribute('aria-label') || '') + ' ' + (e.className || '');
       return (/(quality|画质|清晰度|质量|解析度)/i.test(t) && t.length <= 10 && e.offsetParent !== null) ||
-             (/jw-menu-item|jw-settings-content-item/.test(a) && /(quality|画质|清晰)/i.test(a));
+             (/jw-menu-item|jw-settings-content-item/.test(a) && /(quality|画质|清晰)/i.test(a)) ||
+             (/^(quality|画质|清晰度)$/i.test((e.getAttribute('aria-label')||'').trim()) && e.offsetParent !== null);
     });
   };
   if ((window.__eq_dump === undefined)) {
