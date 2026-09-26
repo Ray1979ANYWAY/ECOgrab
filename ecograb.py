@@ -218,7 +218,11 @@ class Sniffer:
                f"--remote-debugging-port={CHROME_PORT}",
                f"--user-data-dir={CHROME_PROFILE}",
                "--no-first-run", "--no-default-browser-check",
-               "--remote-allow-origins=*"]
+               "--remote-allow-origins=*",
+               "--disable-extensions",
+               "--disable-sync",
+               "--disable-features=ExtensionsToolbarMenu,Translate,ReadingList,BookmarkBar",
+               f"--app={url or 'about:blank'}"]
         try:
             self.proc = subprocess.Popen(cmd)
         except OSError as e:
@@ -245,14 +249,25 @@ class Sniffer:
             if not self.running:
                 return
             try:
-                req = urllib.request.Request(
-                    f"http://127.0.0.1:{CHROME_PORT}/json/new?{urllib.parse.quote(self.start_url, safe='')}",
-                    data=b"", method="PUT")
+                req = urllib.request.Request(f"http://127.0.0.1:{CHROME_PORT}/json")
                 with urllib.request.urlopen(req, timeout=2) as resp:
-                    t = json.loads(resp.read().decode("utf-8", "replace"))
-                    if t.get("webSocketDebuggerUrl"):
-                        ws_url = t["webSocketDebuggerUrl"]
+                    tabs = json.loads(resp.read().decode("utf-8", "replace"))
+                target = None
+                for t in tabs:
+                    if t.get("type") != "page":
+                        continue
+                    u = t.get("url", "")
+                    if self.start_url and self.start_url != "about:blank" and u.startswith(self.start_url):
+                        target = t
                         break
+                if target is None and (not self.start_url or self.start_url == "about:blank"):
+                    for t in tabs:
+                        if t.get("type") == "page":
+                            target = t
+                            break
+                if target and target.get("webSocketDebuggerUrl"):
+                    ws_url = target["webSocketDebuggerUrl"]
+                    break
             except Exception:
                 pass
             time.sleep(0.5)
@@ -933,6 +948,21 @@ class App:
         if d:
             self.dl_dir_var.set(d)
 
+    def _ensure_new_download(self, url, fmt_arg):
+        """同 URL 同格式已在池中 → 提示；已下载完成 → 询问是否重新下载"""
+        for t in self.pool.tasks:
+            if t.url == url and t.fmt_arg == fmt_arg:
+                if t.state in ("downloading", "paused", "waiting"):
+                    messagebox.showinfo("已在下载池",
+                        "该视频（此清晰度/格式）已在下载池中（下载中/排队/暂停），无需重复添加。",
+                        parent=self.root)
+                    return False
+                if t.state == "done":
+                    return messagebox.askyesno("已下载过",
+                        "该视频（此清晰度/格式）此前已下载完成。\n是否重新下载？",
+                        parent=self.root)
+        return True
+
     # ---------- 日志与队列 ----------
     def log(self, msg):
         self.q.put(("log", msg))
@@ -1301,6 +1331,8 @@ class App:
                 except Exception:
                     return
                 fsz = fmt.get("size") or fmt.get("filesize") or fmt.get("filesize_approx")
+                if not self._ensure_new_download(url, fmt_arg_for(fmt)):
+                    return
                 self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                               f"{fmt['res'] or fmt['id']} · {fmt['id']}", True,
                               referer=self._sniff_referer(), size=fsz)
@@ -1313,6 +1345,8 @@ class App:
             is_audio = bool(vals and "音频" in str(vals[0]))
             name = (str(vals[0]) + " · 捕获") if vals and vals[0] else f"捕获流 {len(self.captured)}"
             meta = self.cap_meta.get(url) or {}
+            if not self._ensure_new_download(url, None):
+                return
             self.pool.add(url, None, self.dl_dir_var.get(), None,
                           name, True, referer=self._sniff_referer(),
                           size=meta.get("size"))
@@ -1327,6 +1361,8 @@ class App:
         t = (info.get("title") or "").strip() or f"{fmt['res'] or fmt['id']} · {fmt['id']}"
         ext = fmt.get("ext") or "mp4"
         fsz = fmt.get("size") or fmt.get("filesize") or fmt.get("filesize_approx")
+        if not self._ensure_new_download(url, fmt_arg_for(fmt)):
+            return
         self.pool.add(url, fmt_arg_for(fmt), self.dl_dir_var.get(), None,
                       f"{t}.{ext}", True,
                       referer=url if not url.startswith("about:") else None,
