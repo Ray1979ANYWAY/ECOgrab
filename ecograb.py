@@ -386,6 +386,43 @@ class Sniffer:
     }
   }
   let root = v ? (v.closest('.jwplayer') || v.closest('.jw-media') || v.parentElement.parentElement || v.parentElement || document) : document;
+  if (window.__eq_api === undefined) {
+    window.__eq_api = 'none';
+    try {
+      if (typeof window.jwplayer === 'function') {
+        const inst = jwplayer();
+        if (inst && inst.getQualityLevels) {
+          const lv = inst.getQualityLevels();
+          if (lv && lv.length) {
+            window.__eq_api = 'jw';
+            window.__eq_api_levels = lv.map(l => (l && (l.label || l.name)) || '');
+            console.log('EQ api: jw ' + JSON.stringify(window.__eq_api_levels));
+          }
+        }
+      }
+    } catch(e) { window.__eq_api = 'none'; }
+  }
+  const st = window.__eq_state || 0;
+  if (window.__eq_api === 'jw' && st !== 9) {
+    const idx = window.__eq_api_idx || 0;
+    const levels = window.__eq_api_levels || [];
+    if (idx < levels.length) {
+      window.__eq_api_idx = idx + 1;
+      try { jwplayer().setCurrentQuality(idx); console.log('EQ api click: ' + levels[idx]); }
+      catch(e) { console.log('EQ api err'); }
+    } else { window.__eq_state = 9; console.log('EQ api done'); }
+    return 'ok';
+  }
+  if (window.__eq_dump === undefined) {
+    window.__eq_dump = 1;
+    try {
+      const gears = [...root.querySelectorAll('[class*=settings], [aria-label*="settings" i]')];
+      console.log('EQ gears: ' + JSON.stringify(gears.slice(0, 10).map(e => ({
+        tag: e.tagName, aria: e.getAttribute('aria-label')||'', cls: (e.className||'').toString().slice(0, 60),
+        kids: e.children.length, vis: e.offsetParent!==null
+      }))));
+    } catch(e) { console.log('EQ gears err'); }
+  }
   const qOpts = () => [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
     const t = (e.textContent || '').trim();
     return isQ.test(t) && e.children.length <= 1 && e.offsetParent !== null;
@@ -415,20 +452,6 @@ class Sniffer:
              (/^(quality|画质|清晰度)$/i.test((e.getAttribute('aria-label')||'').trim()) && e.offsetParent !== null);
     });
   };
-  if ((window.__eq_dump === undefined)) {
-    window.__eq_dump = 1;
-    try {
-      const cands = [...root.querySelectorAll('button,div,span,a')].filter(e => {
-        const a = ((e.getAttribute('aria-label')||'') + ' ' + (e.getAttribute('title')||'') + ' ' + (e.className||''));
-        return /(settings|设置|gear|quality)/i.test(a) || /(settings|设置|gear|quality|画质|清晰)/i.test((e.textContent||'').trim());
-      });
-      console.log('EQ cands: ' + JSON.stringify(cands.slice(0, 14).map(e => ({
-        tag: e.tagName, aria: e.getAttribute('aria-label')||'', title: e.getAttribute('title')||'',
-        cls: (e.className||'').toString().slice(0, 50), txt: (e.textContent||'').trim().slice(0, 30), vis: e.offsetParent!==null
-      }))));
-    } catch(e) { console.log('EQ dump err'); }
-  }
-  const st = window.__eq_state || 0;
   if (st === 2) {
     const opts = qOpts();
     if (opts.length) {
@@ -448,16 +471,6 @@ class Sniffer:
     if (!open) {
       if (settingsBtn) { settingsBtn.click(); console.log('EQ: reopen settings'); return 'ok'; }
       console.log('EQ: done no settings'); window.__eq_state = 9; return 'done';
-    }
-    if ((window.__eq_st1_dump === undefined)) {
-      window.__eq_st1_dump = 1;
-      try {
-        const visibles = [...root.querySelectorAll('li,div,span,button,a')].filter(e => {
-          const t = (e.textContent||'').trim();
-          return t && t.length <= 12 && e.offsetParent !== null;
-        });
-        console.log('EQ st1 dump: ' + JSON.stringify([...new Set(visibles.map(e => (e.textContent||'').trim()))].slice(0, 30)));
-      } catch(e) { console.log('EQ st1 dump err'); }
     }
     const sub = findSub(root);
     if (sub) { sub.click(); window.__eq_state = 2; console.log('EQ: sub ' + (sub.textContent || '').trim()); return 'ok'; }
